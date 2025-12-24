@@ -5,10 +5,11 @@
 # - GPS for positioning
 
 import json
+from model.gps import GPS
 
 class EnvironmentalMonitoringStation:
 
-    def __init__(self, position):
+    def __init__(self, position: GPS):
         self.position = position # GPS
         self.range = 10 # meters
         self.dust = 0

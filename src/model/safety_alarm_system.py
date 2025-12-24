@@ -19,11 +19,11 @@ class SafetyAlarmSystem:
     def turn_siren_off(self):
         self.siren = False
 
-    def add_dangerous_zone(self, ID):
-        self.display.append(ID)
+    def add_dangerous_zone(self, id: int):
+        self.display.append(id)
 
-    def remove_dangerous_zone(self, ID):
-        self.display.remove(ID)    
+    def remove_dangerous_zone(self, id: int):
+        self.display.remove(id)    
 
     def to_json(self):
         return json.dumps(self, default=lambda o: o.__dict__)

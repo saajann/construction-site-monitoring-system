@@ -4,15 +4,19 @@
 # - Multicolor LED
 
 import json
+from model.gps import GPS
 
 class WorkerSmartHelmet:
 
-    def __init__(self, position):
+    def __init__(self, position: GPS):
         self.position = position
         self.battery = 100
         self.led = 0 # if 0 then LED is green, if 1 then LED is yellow and needs to be recharged
     
     def check_if_dangerous(self):
+        ...
+
+    def descrease_battery_level(self):
         ...
 
     def check_battery_level(self):
