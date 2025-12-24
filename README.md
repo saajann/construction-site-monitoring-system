@@ -90,4 +90,8 @@ During the demo, a minimal configuration can be emulated to demonstrate the corr
 
 ---
 
+## How to run
+
+- install required libraries from requirements.txt
+
 Project developed by **Saajan Saini**
