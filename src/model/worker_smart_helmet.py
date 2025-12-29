@@ -8,7 +8,8 @@ from model.gps import GPS
 
 class WorkerSmartHelmet:
 
-    def __init__(self, position: GPS):
+    def __init__(self, id: str, position: GPS):
+        self.id = id
         self.position = position
         self.battery = 100
         self.led = 0 # if 0 then LED is green, if 1 then LED is yellow and needs to be recharged
@@ -26,7 +27,18 @@ class WorkerSmartHelmet:
         ...
 
     def move(self):
-        ...
+        self.position.update_latitude(self.position.latitude + 1)
+        self.position.update_longitude(self.position.longitude + 1)
+    
+    def info(self):
+        # return json of info
+        data = {
+            "id": self.id,
+            "latitude": self.position.latitude,
+            "longitude": self.position.longitude,
+            "altitude": self.position.altitude,
+            "battery": self.battery,
+            "led": self.led
+        }
 
-    def to_json(self):
-        return json.dumps(self, default=lambda o: o.__dict__)
+        return json.dumps(data)

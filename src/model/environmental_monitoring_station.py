@@ -9,7 +9,8 @@ from model.gps import GPS
 
 class EnvironmentalMonitoringStation:
 
-    def __init__(self, position: GPS):
+    def __init__(self, id: str, position: GPS):
+        self.id = id
         self.position = position # GPS
         self.range = 10 # meters
         self.dust = 0

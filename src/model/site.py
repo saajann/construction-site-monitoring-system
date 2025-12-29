@@ -21,7 +21,7 @@ class Site:
     
 class Sector:
 
-    def __init__(self, id, area_vertices: AreaVertices):
+    def __init__(self, id: str, area_vertices: AreaVertices):
         self.id = id
         self.area_vertices = area_vertices
         self.status = 0 # 0 -> SAFE, 1 -> DANGEROUS
