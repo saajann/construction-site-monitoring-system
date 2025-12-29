@@ -17,14 +17,22 @@ class WorkerSmartHelmet:
     def check_if_dangerous(self):
         ...
 
-    def descrease_battery_level(self):
-        ...
+    def descrease_battery_level(self, qty: int):
+        self.battery -= qty
+        if self.battery < 0:
+            self.battery = 0
 
     def check_battery_level(self):
-        ...
+        if self.battery < 10:
+            self.led = 1
+            return True
+        return False
     
-    def recharge_battery(self):
-        ...
+    def recharge_battery(self, qty: int):
+        self.battery += qty
+        if self.battery >= 100:
+            self.battery = 100
+            self.led = 0
 
     def move(self):
         self.position.update_latitude(self.position.latitude + 1)
