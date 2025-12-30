@@ -13,10 +13,9 @@ import os
 load_dotenv()
 
 # FIXED VARIABLES
-BROKER_ADDRESS = os.getenv("BROKER_ADDRESS")
-DUST_LIMIT = int(os.getenv("DUST_LIMIT"))
-NOISE_LIMIT = int(os.getenv("NOISE_LIMIT"))
-GAS_LIMIT = int(os.getenv("GAS_LIMIT"))
+#DUST_LIMIT = int(os.getenv("DUST_LIMIT"))
+#NOISE_LIMIT = int(os.getenv("NOISE_LIMIT"))
+#GAS_LIMIT = int(os.getenv("GAS_LIMIT"))
 MONITORING_STATION_RANGE = int(os.getenv("MONITORING_STATION_RANGE"))
 
 
@@ -25,7 +24,7 @@ class EnvironmentalMonitoringStation:
     def __init__(self, id: str, position: GPS):
         self.id = id
         self.position = position # GPS
-        self.range = 10 # meters
+        self.range = MONITORING_STATION_RANGE # meters
         self.dust = 0
         self.noise = 0
         self.gas = 0
@@ -40,7 +39,9 @@ class EnvironmentalMonitoringStation:
         self.gas = random.randint(0,100)
 
     def change_position(self):
-        ...
+        # temporary logic
+        self.position.update_latitude(self.position.latitude + 1)
+        self.position.update_longitude(self.position.longitude + 1)
     
     def info(self):
         # return json of info

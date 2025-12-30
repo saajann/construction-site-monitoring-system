@@ -39,6 +39,7 @@ class WorkerSmartHelmet:
             self.led = 0
 
     def move(self):
+        # temporary logic
         self.position.update_latitude(self.position.latitude + 1)
         self.position.update_longitude(self.position.longitude + 1)
     

@@ -27,11 +27,10 @@ BROKER_ADDRESS = os.getenv("BROKER_ADDRESS")
 BROKER_PORT = int(os.getenv("BROKER_PORT"))
 MQTT_USERNAME = os.getenv("MQTT_USERNAME")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
-MQTT_BASIC_TOPIC = os.getenv("MQTT_BASIC_TOPIC")
+MQTT_BASIC_TOPIC = os.getenv("MQTT_BASIC_TOPIC") + MQTT_USERNAME
 MESSAGE_LIMIT = int(os.getenv("MESSAGE_LIMIT"))
 TIME_BETWEEN_MESSAGE = int(os.getenv("TIME_BETWEEN_MESSAGE"))
-
-TOPIC='helmet'
+TOPIC_HELMET = os.getenv("TOPIC_HELMET")
 
 CSV_PATH = ROOT / "data" / "helmets.csv"
 
@@ -58,12 +57,12 @@ def start_helmet_device(helmet_id, latitude, longitude):
     helmet = WorkerSmartHelmet(helmet_id, position)
     
     # publish initial info
-    info_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC}/{helmet_id}/info"
+    info_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}/info"
     mqtt_client.publish(info_topic, helmet.info(), 0, True)
     print(f"Helmet {helmet_id} info published")
     
-    # Loop telemetria
-    telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC}/{helmet_id}"
+    # Loop telemetry
+    telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}"
     
     for message_id in range(MESSAGE_LIMIT):
         
