@@ -1,0 +1,1 @@
+# file for running all smart objects

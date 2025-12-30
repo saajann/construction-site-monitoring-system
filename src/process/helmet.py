@@ -1,4 +1,8 @@
 # src/process/helmet.py
+
+# pub helmet info -> DONE
+# sub data collector / manager -> TO DO
+
 import paho.mqtt.client as mqtt
 import time
 import random

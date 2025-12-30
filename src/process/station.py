@@ -1,4 +1,7 @@
 # src/process/station.py
+
+# pub station info -> DONE
+
 import paho.mqtt.client as mqtt
 import time
 import os
