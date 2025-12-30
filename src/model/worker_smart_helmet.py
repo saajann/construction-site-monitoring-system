@@ -26,17 +26,14 @@ class WorkerSmartHelmet:
         if self.battery < 0:
             self.battery = 0
 
-    def check_battery_level(self):
-        if self.battery < 10:
-            self.led = 1
-            return True
-        return False
+    def set_led(self, state: int): # i dont need it here, it will be implemented in the data collector and manager 
+        self.led = state
     
     def recharge_battery(self, qty: int):
         self.battery += qty
         if self.battery >= 100:
             self.battery = 100
-            self.led = 0
+            #self.led = 0
 
     def move(self):
         # temporary logic

@@ -1,7 +1,6 @@
 # src/process/helmet.py
-
 # pub helmet info -> DONE
-# sub data collector / manager -> TO DO
+# sub data collector / manager -> DONE
 
 import paho.mqtt.client as mqtt
 import time
@@ -10,9 +9,9 @@ import os
 from dotenv import load_dotenv
 import sys
 from pathlib import Path
-
 import csv
 import threading
+import json
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
@@ -31,61 +30,136 @@ MQTT_BASIC_TOPIC = os.getenv("MQTT_BASIC_TOPIC") + MQTT_USERNAME
 MESSAGE_LIMIT = int(os.getenv("MESSAGE_LIMIT"))
 TIME_BETWEEN_MESSAGE = int(os.getenv("TIME_BETWEEN_MESSAGE"))
 TOPIC_HELMET = os.getenv("TOPIC_HELMET")
+TOPIC_MANAGER = os.getenv("TOPIC_MANAGER")
 
 CSV_PATH = ROOT / "data" / "helmets.csv"
 
 
 def on_connect(client, userdata, flags, rc):
-    print(f"Helmet {userdata['helmet_id']} connected with result code {rc}")
+    """Callback when helmet connects to broker"""
+    helmet_id = userdata['helmet_id']
+    print(f"Helmet {helmet_id} connected with result code {rc}")
+    
+    if rc == 0:
+        # Subscribe to commands from manager for this specific helmet
+        command_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_HELMET}/{helmet_id}/command"
+        client.subscribe(command_topic, qos=0)
+        print(f"✅ Helmet {helmet_id} subscribed to: {command_topic}")
+
+
+def on_message(client, userdata, message):
+    """Callback when helmet receives a command from manager"""
+    helmet = userdata['helmet']
+    helmet_id = userdata['helmet_id']
+    
+    try:
+        topic = message.topic
+        payload = json.loads(message.payload.decode("utf-8"))
+        
+        print(f"\n{'='*50}")
+        print(f"📨 Helmet {helmet_id} received command")
+        print(f"   Topic: {topic}")
+        print(f"   Payload: {payload}")
+        
+        # Process command
+        command = payload.get('command')
+        
+        if command == 'set_led':
+            new_led_status = payload.get('led')
+            if new_led_status is not None:
+                helmet.set_led(new_led_status)
+                print(f"✅ LED status updated: {new_led_status}")
+                if new_led_status == 1:
+                    print(f"🔋 Helmet {helmet_id} entering CHARGING mode")
+                else:
+                    print(f"⚒️  Helmet {helmet_id} entering WORK mode")
+        
+        elif command == 'alert':
+            alert_message = payload.get('message', 'Alert!')
+            print(f"🚨 ALERT received: {alert_message}")
+            # TODO: Implement alert handling (buzzer, vibration, etc.)
+        
+        else:
+            print(f"⚠️  Unknown command: {command}")
+        
+        print(f"{'='*50}\n")
+        
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON decode error: {e}")
+    except Exception as e:
+        print(f"❌ Error processing command: {e}")
+
 
 def start_helmet_device(helmet_id, latitude, longitude):
     """
-    
+    Start a helmet device that:
+    1. Publishes telemetry
+    2. Subscribes to manager commands
+    3. Reacts to commands by changing state
     """
-    # setup client MQTT
-    mqtt_client = mqtt.Client(helmet_id)
-    mqtt_client.user_data_set({'helmet_id': helmet_id})
+    # Setup client MQTT with unique ID
+    client_id = f"python-helmet-{helmet_id}-{MQTT_USERNAME}"
+    mqtt_client = mqtt.Client(client_id)
+    
+    # Create helmet instance
+    position = GPS(latitude, longitude)
+    helmet = WorkerSmartHelmet(helmet_id, position)
+    
+    # Set user data (shared between callbacks)
+    mqtt_client.user_data_set({
+        'helmet_id': helmet_id,
+        'helmet': helmet
+    })
+    
+    # Set callbacks
     mqtt_client.on_connect = on_connect
+    mqtt_client.on_message = on_message
+    
+    # Set credentials
     mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
     
     print(f"Connecting helmet {helmet_id} to {BROKER_ADDRESS}:{BROKER_PORT}")
     mqtt_client.connect(BROKER_ADDRESS, BROKER_PORT)
+    
+    # Start loop (non-blocking)
     mqtt_client.loop_start()
     
-    # create helmet
-    position = GPS(latitude, longitude)
-    helmet = WorkerSmartHelmet(helmet_id, position)
-    
-    # publish initial info
+    # Publish initial info
     info_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}/info"
     mqtt_client.publish(info_topic, helmet.info(), 0, True)
-    print(f"Helmet {helmet_id} info published")
+    print(f"Helmet {helmet_id} info published\n")
     
-    # Loop telemetry
+    # Telemetry publishing loop
     telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}"
     
     for message_id in range(MESSAGE_LIMIT):
+        # Simulate helmet behavior based on LED status
+        # LED = 0 -> WORK mode (moving, battery decreasing)
+        # LED = 1 -> CHARGING mode (stationary, battery increasing)
         
-        # non va bene, lo stato del led deve cambiare con un messaggio di attuazione
-        # non sono sicuro, capire se posso farlo senza messaggio di attuazione o no
-        # logica di business (check battery level) in data collector, toggle solo a seguito di comando del data manager 
         if helmet.led == 0:
+            # WORK MODE
             helmet.move()
-            helmet.descrease_battery_level(random.randint(10,15))
-            helmet.check_battery_level()
+            helmet.descrease_battery_level(random.randint(1, 10))  # Slower drain
         else:
-            helmet.recharge_battery(random.randint(1,10))    
+            # CHARGING MODE
+            helmet.recharge_battery(random.randint(5, 10))  # Faster charge
         
+        # Publish telemetry
         payload = helmet.info()
         mqtt_client.publish(telemetry_topic, payload, 0, False)
-        print(f"Topic {telemetry_topic} - Message {message_id}: {payload}")
+        print(f"[{message_id}] Helmet {helmet_id}: Battery={helmet.battery}%, LED={helmet.led}")
+        
         time.sleep(TIME_BETWEEN_MESSAGE)
     
+    # Cleanup
     mqtt_client.loop_stop()
     mqtt_client.disconnect()
     print(f"Helmet {helmet_id} disconnected")
 
+
 def load_helmets(csv_path):
+    """Load helmet configuration from CSV"""
     helmets = []
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
@@ -95,13 +169,15 @@ def load_helmets(csv_path):
             )
     return helmets
 
+
 def main():
-    print("=== Starting Helmets ===\n")
-
+    print("\n" + "="*60)
+    print("⛑️  STARTING SMART HELMETS")
+    print("="*60 + "\n")
+    
     helmets = load_helmets(CSV_PATH)
-
     threads = []
-
+    
     for helmet in helmets:
         t = threading.Thread(
             target=start_helmet_device,
@@ -110,15 +186,18 @@ def main():
         )
         t.start()
         threads.append(t)
-        print(f"Helmet {helmet[0]} started")
-
-    print("\nAll helmets running\n")
-
+        print(f"✅ Helmet {helmet[0]} started")
+    
+    print(f"\n{'='*60}")
+    print(f"All {len(helmets)} helmets running")
+    print(f"{'='*60}\n")
+    
     try:
         for t in threads:
             t.join()
     except KeyboardInterrupt:
-        print("\nShutting down system")
+        print("\n🛑 Shutting down helmets...")
+
 
 if __name__ == "__main__":
     main()
