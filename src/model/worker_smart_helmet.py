@@ -13,6 +13,10 @@ class WorkerSmartHelmet:
         self.position = position
         self.battery = 100
         self.led = 0 # if 0 then LED is green, if 1 then LED is yellow and needs to be recharged
+        # forse è meglio cambiare la logica del led, conviene fare:
+            # 0, green, tutto ok
+            # 1, giallo, batteria sotto il 10% 
+            # 2, rosso, è entrato in una zona pericolosa
     
     def check_if_dangerous(self):
         ...
