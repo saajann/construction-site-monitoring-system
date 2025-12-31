@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 import sys
 from pathlib import Path
+import json
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
@@ -22,37 +23,47 @@ MQTT_USERNAME = os.getenv("MQTT_USERNAME")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
 MQTT_BASIC_TOPIC = os.getenv("MQTT_BASIC_TOPIC") + MQTT_USERNAME
 TOPIC_ALARM = os.getenv("TOPIC_ALARM")
+TOPIC_MANAGER = os.getenv("TOPIC_MANAGER")
 
 # subscribe to topics 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code " + str(rc))
 
-    # subscribe to the INFO topic
-    device_info_topic = "{0}/{1}/#".format(
-                    MQTT_BASIC_TOPIC,
-                    TOPIC_ALARM,
-                    )
-
-    mqtt_client.subscribe(device_info_topic)
-    print("Subscribed to: " + device_info_topic)
-
-    # subscribe to the TELEMETRY topic
-    device_telemetry_topic = "{0}/{1}/#".format(
-        MQTT_BASIC_TOPIC,
-        TOPIC_ALARM,
-        )
-
-    mqtt_client.subscribe(device_telemetry_topic)
-    print("Subscribed to: " + device_telemetry_topic)
+    # Subscribe to manager commands for this alarm
+    # Topic: /base/manager/alarm/alarm_id/command (using wildcard for all alarms for now or specific)
+    # Let's subscribe to all alarm commands from manager
+    command_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_ALARM}/#"
+    client.subscribe(command_topic)
+    print(f"✅ Subscribed to: {command_topic}")
 
 # method to receive asynchronous messages
 def on_message(client, userdata, message):
-    message_payload = str(message.payload.decode("utf-8"))
-    print(f"Received IoT Message: Topic: {message.topic} Payload: {message_payload}")
+    try:
+        payload = json.loads(message.payload.decode("utf-8"))
+        topic = message.topic
+        print(f"\n📨 Received: {topic}")
+        print(f"📦 Payload: {payload}")
+
+        command = payload.get("command")
+        
+        if command == "turn_siren_on":
+            alarm_system.turn_siren_on()
+            print(f"🚨 COMMAND RECEIVED: {command} -> Siren is NOW ON")
+        elif command == "turn_siren_off":
+            alarm_system.turn_siren_off()
+            print(f"🔕 COMMAND RECEIVED: {command} -> Siren is NOW OFF")
+        else:
+            print(f"ℹ️  Unknown command: {command}")
+
+    except json.JSONDecodeError:
+        print(f"❌ Failed to decode JSON payload: {message.payload}")
+    except Exception as e:
+        print(f"❌ Error processing message: {e}")
 
 
 # configuration variables
 alarm_id = "alarm_001"
+alarm_system = SafetyAlarmSystem()
 
 mqtt_client = mqtt.Client(alarm_id)
 mqtt_client.on_message = on_message
@@ -65,4 +76,9 @@ print("Connecting to " + BROKER_ADDRESS + " port: " + str(BROKER_PORT))
 mqtt_client.connect(BROKER_ADDRESS, BROKER_PORT)
 
 # start comunication
-mqtt_client.loop_forever()
+try:
+    print(f"🔔 Alarm {alarm_id} started. Waiting for commands...")
+    mqtt_client.loop_forever()
+except KeyboardInterrupt:
+    print("\n🛑 Shutting down alarm...")
+    mqtt_client.disconnect()

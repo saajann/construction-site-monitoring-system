@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 import json
 import time
+import random
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
@@ -29,6 +30,8 @@ MQTT_BASIC_TOPIC = os.getenv("MQTT_BASIC_TOPIC") + MQTT_USERNAME
 
 TOPIC_HELMET = os.getenv("TOPIC_HELMET")
 TOPIC_MANAGER = os.getenv("TOPIC_MANAGER")
+TOPIC_STATION = os.getenv("TOPIC_STATION")
+TOPIC_ALARM = os.getenv("TOPIC_ALARM")
 
 # Battery thresholds
 BATTERY_LOW_THRESHOLD = 10
@@ -43,6 +46,7 @@ class DataCollectorManager:
         
         # Track helmet states
         self.helmet_states = {}  # {helmet_id: {'battery': int, 'led': int, 'position': tuple}}
+        self.station_states = {} # {station_id: {...}}
     
     def on_connect(self, client, userdata, flags, rc):
         """Callback when connected to MQTT broker"""
@@ -53,6 +57,11 @@ class DataCollectorManager:
             helmet_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/#"
             client.subscribe(helmet_topic, qos=0)
             print(f"✅ Subscribed to: {helmet_topic}")
+
+            # Subscribe to all station telemetry
+            station_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/#"
+            client.subscribe(station_topic, qos=0)
+            print(f"✅ Subscribed to: {station_topic}")
         else:
             print(f"❌ Connection failed with code {rc}")
     
@@ -66,8 +75,11 @@ class DataCollectorManager:
             print(f"📨 Received: {topic}")
             print(f"📦 Payload: {payload}")
             
-            # Process helmet message
-            self._handle_helmet_message(topic, payload)
+            # Route message based on topic
+            if f"/{TOPIC_HELMET}/" in topic:
+                self._handle_helmet_message(topic, payload)
+            elif f"/{TOPIC_STATION}/" in topic:
+                self._handle_station_message(topic, payload)
             
             print(f"{'='*60}\n")
             
@@ -75,7 +87,48 @@ class DataCollectorManager:
             print(f"❌ JSON decode error: {e}")
         except Exception as e:
             print(f"❌ Error processing message: {e}")
-    
+
+    def _handle_station_message(self, topic, payload):
+        """Process station telemetry"""
+        station_id = payload.get('id')
+        if not station_id:
+            print("⚠️  No station ID in payload")
+            return
+
+        # Store/Update station state
+        self.station_states[station_id] = payload
+        print(f"🏢 Station {station_id} update: Dust={payload.get('dust_level')}, Noise={payload.get('noise_level')}")
+        
+        # Check for random alarm condition (Temporary Logic)
+        rand = random.random()
+        if rand < 0.15: 
+            print("🎲 Random check triggered SIREN ON!")
+            self._send_alarm_command("alarm_001", "turn_siren_on")
+        elif rand < 0.30:
+            print("🎲 Random check triggered SIREN OFF!")
+            self._send_alarm_command("alarm_001", "turn_siren_off")
+
+    def _send_alarm_command(self, alarm_id, command):
+        """
+        Send command to an alarm device
+        """
+        # Topic: /base/manager/alarm/alarm_id/command
+        command_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_ALARM}/{alarm_id}/command"
+        
+        payload = {
+            "command": command,
+            "timestamp": time.time()
+        }
+        
+        payload_json = json.dumps(payload)
+        
+        result = self.mqtt_client.publish(command_topic, payload_json, qos=0, retain=False)
+        
+        if result.rc == 0:
+            print(f"🚨 Command sent to alarm {alarm_id}: {command}")
+        else:
+            print(f"❌ Failed to send command to alarm {alarm_id}")
+
     def _handle_helmet_message(self, topic, payload):
         """Process helmet telemetry and apply business logic"""
         helmet_id = payload.get('id')

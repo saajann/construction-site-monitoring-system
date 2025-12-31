@@ -30,13 +30,13 @@ class EnvironmentalMonitoringStation:
         self.gas = 0
 
     def update_dust_level(self):
-        self.dust = random.randint(0,100)
+        self.dust += 1
 
     def update_noise_level(self):
-        self.noise = random.randint(0,100)
+        self.noise += 1
 
     def update_gas_level(self):
-        self.gas = random.randint(0,100)
+        self.gas += 1
 
     def change_position(self):
         # temporary logic
