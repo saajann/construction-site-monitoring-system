@@ -54,13 +54,8 @@ def start_station_device(station_id, latitude, longitude):
     position = GPS(latitude, longitude)
     station = EnvironmentalMonitoringStation(station_id, position)
     
-    # publish initial info
-    info_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/{station_id}/info"
-    mqtt_client.publish(info_topic, station.info(), 0, True)
-    print(f"Station {station_id} info published")
-    
     # Loop telemetry
-    telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/{station_id}"
+    telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/{station_id}/telemetry"
     
     for message_id in range(MESSAGE_LIMIT):
         

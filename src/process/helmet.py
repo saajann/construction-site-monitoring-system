@@ -124,13 +124,8 @@ def start_helmet_device(helmet_id, latitude, longitude):
     # Start loop (non-blocking)
     mqtt_client.loop_start()
     
-    # Publish initial info
-    info_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}/info"
-    mqtt_client.publish(info_topic, helmet.info(), 0, True)
-    print(f"Helmet {helmet_id} info published\n")
-    
     # Telemetry publishing loop
-    telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}"
+    telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}/telemetry"
     
     for message_id in range(MESSAGE_LIMIT):
         # Simulate helmet behavior based on LED status
