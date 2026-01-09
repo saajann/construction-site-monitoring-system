@@ -4,6 +4,7 @@
 # - Multicolor LED
 
 import json
+import random
 from model.gps import GPS
 
 class WorkerSmartHelmet:
@@ -36,9 +37,16 @@ class WorkerSmartHelmet:
             #self.led = 0
 
     def move(self):
-        # temporary logic
-        self.position.update_latitude(self.position.latitude + 1)
-        self.position.update_longitude(self.position.longitude + 1)
+        # Realistic random walk: small steps (~1-2 meters)
+        # 1 deg lat ~ 111km -> 1m ~ 0.000009 deg
+        step_size = 0.00002 # approx 2 meters
+        
+        # Random direction
+        d_lat = random.uniform(-step_size, step_size)
+        d_lon = random.uniform(-step_size, step_size)
+        
+        self.position.update_latitude(self.position.latitude + d_lat)
+        self.position.update_longitude(self.position.longitude + d_lon)
     
     def info(self):
         # return json of info

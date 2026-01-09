@@ -34,7 +34,7 @@ CSV_PATH = ROOT / "data" / "stations.csv"
 
 
 def on_connect(client, userdata, flags, rc):
-    print(f"Helmet {userdata['station_id']} connected with result code {rc}")
+    print(f"Station {userdata['station_id']} connected with result code {rc}")
 
 def start_station_device(station_id, latitude, longitude):
     """
@@ -57,7 +57,8 @@ def start_station_device(station_id, latitude, longitude):
     # Loop telemetry
     telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/{station_id}/telemetry"
     
-    for message_id in range(MESSAGE_LIMIT):
+    # for message_id in range(MESSAGE_LIMIT):
+    while True:
         
         station.update_dust_level()
         station.update_noise_level()
@@ -65,7 +66,15 @@ def start_station_device(station_id, latitude, longitude):
         
         payload = station.info()
         mqtt_client.publish(telemetry_topic, payload, 0, False)
-        print(f"Topic {telemetry_topic} - Message {message_id}: {payload}")
+        
+        log_msg = (
+            f"[STA-{station_id}] 📤 SENT | "
+            f"Dust: {station.dust:6.2f} | "
+            f"Noise: {station.noise:6.2f} | "
+            f"Gas: {station.gas:4.2f} | "
+            f"Pos: ({station.position.latitude:.5f}, {station.position.longitude:.5f})"
+        )
+        print(log_msg)
         time.sleep(TIME_BETWEEN_MESSAGE)
     
     mqtt_client.loop_stop()

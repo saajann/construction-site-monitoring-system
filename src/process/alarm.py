@@ -48,10 +48,25 @@ def on_message(client, userdata, message):
         
         if command == "turn_siren_on":
             alarm_system.turn_siren_on()
-            print(f"🚨 COMMAND RECEIVED: {command} -> Siren is NOW ON")
+            print(f"[ALM] 📥 CMD | Siren ON  📢")
         elif command == "turn_siren_off":
             alarm_system.turn_siren_off()
-            print(f"🔕 COMMAND RECEIVED: {command} -> Siren is NOW OFF")
+            print(f"[ALM] 📥 CMD | Siren OFF 🔕")
+        elif command == "update_display":
+            new_zones = set(payload.get("zones", []))
+            current_zones = set(alarm_system.display)
+            
+            # Identify zones to add and remove
+            to_add = new_zones - current_zones
+            to_remove = current_zones - new_zones
+            
+            for z_id in to_add:
+                alarm_system.add_dangerous_zone(z_id)
+                
+            for z_id in to_remove:
+                alarm_system.remove_dangerous_zone(z_id)
+            
+            print(f"[ALM] 📥 CMD | Update Display | Zones: {alarm_system.display}")
         else:
             print(f"ℹ️  Unknown command: {command}")
 

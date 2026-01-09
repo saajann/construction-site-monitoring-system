@@ -127,7 +127,8 @@ def start_helmet_device(helmet_id, latitude, longitude):
     # Telemetry publishing loop
     telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}/telemetry"
     
-    for message_id in range(MESSAGE_LIMIT):
+    # for message_id in range(MESSAGE_LIMIT):
+    while True:
         # Simulate helmet behavior based on LED status
         # LED = 0 -> WORK mode (moving, battery decreasing)
         # LED = 1 -> CHARGING mode (stationary, battery increasing)
@@ -143,7 +144,15 @@ def start_helmet_device(helmet_id, latitude, longitude):
         # Publish telemetry
         payload = helmet.info()
         mqtt_client.publish(telemetry_topic, payload, 0, False)
-        print(f"[{message_id}] Helmet {helmet_id}: Battery={helmet.battery}%, LED={helmet.led}")
+        
+        # Clean Logic
+        log_msg = (
+            f"[HLM-{helmet_id}] 📤 SENT | "
+            f"Bat: {helmet.battery:3d}% | "
+            f"LED: {helmet.led} | "
+            f"Pos: ({helmet.position.latitude:.5f}, {helmet.position.longitude:.5f})"
+        )
+        print(log_msg)
         
         time.sleep(TIME_BETWEEN_MESSAGE)
     

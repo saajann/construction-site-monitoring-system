@@ -25,23 +25,32 @@ class EnvironmentalMonitoringStation:
         self.id = id
         self.position = position # GPS
         self.range = MONITORING_STATION_RANGE # meters
-        self.dust = 0
-        self.noise = 0
-        self.gas = 0
+        self.dust = random.uniform(20, 40)
+        self.noise = random.uniform(40, 60)
+        self.gas = random.uniform(0, 0.5)
 
     def update_dust_level(self):
-        self.dust += 1
+        # Fluctuate: +/- random value, keep roughly within range [0, 100]
+        change = random.uniform(-5, 5)
+        # Allow it to go higher to test alarm occasionally
+        self.dust = max(0, min(120, self.dust + change))
 
     def update_noise_level(self):
-        self.noise += 1
+        change = random.uniform(-5, 5)
+        self.noise = max(0, min(120, self.noise + change))
 
     def update_gas_level(self):
-        self.gas += 1
+        change = random.uniform(-0.1, 0.1)
+        self.gas = max(0, min(10, self.gas + change))
 
     def change_position(self):
-        # temporary logic
-        self.position.update_latitude(self.position.latitude + 1)
-        self.position.update_longitude(self.position.longitude + 1)
+        # Stations move rarely and slowly if at all (e.g. mounted on machinery)
+        step_size = 0.00001 # approx 1 meter
+        d_lat = random.uniform(-step_size, step_size)
+        d_lon = random.uniform(-step_size, step_size)
+        
+        self.position.update_latitude(self.position.latitude + d_lat)
+        self.position.update_longitude(self.position.longitude + d_lon)
     
     def info(self):
         # return json of info
