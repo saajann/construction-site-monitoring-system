@@ -395,7 +395,9 @@ def main():
     print("="*60 + "\n")
     
     # Setup MQTT client with unique ID
-    client_id = f"python-manager-{MQTT_USERNAME}"
+    # Setup MQTT client with unique ID to avoid conflicts
+    import uuid
+    client_id = f"python-manager-{MQTT_USERNAME}-{uuid.uuid4().hex[:6]}"
     mqtt_client = mqtt.Client(client_id)
     
     # Create manager instance
@@ -404,6 +406,12 @@ def main():
     # Set callbacks
     mqtt_client.on_connect = manager.on_connect
     mqtt_client.on_message = manager.on_message
+    
+    def on_disconnect(client, userdata, rc):
+        if rc != 0:
+            print(f"❌ Unexpected disconnection. Result code: {rc}")
+    
+    mqtt_client.on_disconnect = on_disconnect
     
     # Set credentials
     mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
