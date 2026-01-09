@@ -49,7 +49,7 @@ BATTERY_FULL_THRESHOLD = 100
 
 # Environmental Thresholds
 DUST_THRESHOLD = 50.0
-NOISE_THRESHOLD = 80.0
+NOISE_THRESHOLD = 50.0
 GAS_THRESHOLD = 1.0 # Presence of gas
 
 # Grid Configuration
