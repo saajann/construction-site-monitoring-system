@@ -53,22 +53,8 @@ def on_message(client, userdata, message):
             alarm_system.turn_siren_off()
             print(f"[ALM] 📥 CMD | Siren OFF 🔕")
         elif command == "update_display":
-            import csv
-            
             new_zones = sorted(list(set(payload.get("zones", []))))
             
-            # Write key output to display.csv
-            display_csv = ROOT / "data" / "display.csv"
-            try:
-                with open(display_csv, 'w', newline='') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(["zone_id"])
-                    for z_id in new_zones:
-                        writer.writerow([z_id])
-                print(f"[ALM] 💾 Saved dangerous zones to {display_csv}")
-            except Exception as e:
-                print(f"❌ Failed to write display.csv: {e}")
-
             # Keep existing logic for internal state (if needed later)
             current_zones = set(alarm_system.display)
             

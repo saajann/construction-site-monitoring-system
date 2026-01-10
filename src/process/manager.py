@@ -96,16 +96,18 @@ class DataCollectorManager:
             self.site = Site(AreaVertices([p1, p2, p3, p4]))
 
         self.site.create_grid(sector_size_meters=SECTOR_SIZE_METERS)
-        self.site.save_grid_to_csv(ROOT / "data" / "sectors.csv")
         
-        # Map stations to affected sector IDs
+        # Internal States for Tracking
+        self.helmet_states = {} # {id: {latitude, longitude, battery, ...}}
         self.station_danger_zones = {} # {station_id: [sector_id, ...]}
-        
-        # Optimization States
-        self.last_sent_zones = None # To avoid redundant updates
         self.current_dangerous_sector_ids = set() # Set of sector IDs currently dangerous
         self.workers_in_danger = set() # Set of helmet_ids currently in danger
+        self.last_sent_zones = None # For optimization
         self.siren_active = False # To avoid redundant siren commands
+        
+        self._load_helmets_from_csv()
+        self.update_sectors_csv() # Initial save
+        self.update_helmets_csv() # Initial save with header
     
     def on_connect(self, client, userdata, flags, rc):
         """Callback when connected to MQTT broker"""
@@ -137,6 +139,7 @@ class DataCollectorManager:
             # Route message based on topic
             if f"/{TOPIC_HELMET}/" in topic:
                 self._handle_helmet_message(topic, payload)
+                self.update_helmets_csv()
             elif f"/{TOPIC_STATION}/" in topic:
                 self._handle_station_message(topic, payload)
             
@@ -220,6 +223,7 @@ class DataCollectorManager:
         if self.last_sent_zones != all_dangerous_zones:
             self.last_sent_zones = all_dangerous_zones
             self._send_alarm_display_update("alarm_001", all_dangerous_zones)
+            self.update_sectors_csv() # Update CSV on change
         else:
             # print(f"    [MGR] ℹ️  Zones unchanged, skipping update")
             pass
@@ -386,6 +390,66 @@ class DataCollectorManager:
     def get_helmet_status(self, helmet_id):
         """Get current status of a helmet"""
         return self.helmet_states.get(helmet_id, {})
+
+    def update_sectors_csv(self):
+        """
+        Saves the current grid to map.csv with STATUS.
+        Format: id, vertices_json, status
+        status: 0 = SAFE, 1 = DANGEROUS
+        """
+        import csv
+        filepath = ROOT / "data" / "map.csv"
+        try:
+            with open(filepath, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["id", "vertices_json", "status"])
+                for sector in self.site.grid:
+                    is_dangerous = 1 if sector.id in self.current_dangerous_sector_ids else 0
+                    coords = [[p.latitude, p.longitude] for p in sector.area_vertices.vertices]
+                    writer.writerow([sector.id, json.dumps(coords), is_dangerous])
+            # print(f"    [MGR] 💾 Saved map.csv")
+        except Exception as e:
+            print(f"❌ Failed to save map.csv: {e}")
+
+    def update_helmets_csv(self):
+        """
+        Saves current helmet positions and states to helmets.csv
+        Format: id, latitude, longitude, battery, is_dangerous
+        """
+        import csv
+        filepath = ROOT / "data" / "helmets.csv"
+        try:
+            with open(filepath, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["id", "latitude", "longitude", "battery", "is_dangerous"])
+                for helmet_id, state in self.helmet_states.items():
+                    lat = state.get("latitude", 0)
+                    lon = state.get("longitude", 0)
+                    battery = state.get("battery", 0)
+                    is_dangerous = 1 if helmet_id in self.workers_in_danger else 0
+                    writer.writerow([helmet_id, lat, lon, battery, is_dangerous])
+            # print(f"    [MGR] 💾 Saved helmets.csv")
+        except Exception as e:
+            print(f"❌ Failed to save helmets.csv: {e}")
+
+    def _load_helmets_from_csv(self):
+        """Loads initial helmet data from CSV to avoid wiping config"""
+        filepath = ROOT / "data" / "helmets.csv"
+        if not filepath.exists():
+            return
+        try:
+            with open(filepath, newline='') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    h_id = row.get('id')
+                    if h_id:
+                        self.helmet_states[h_id] = {
+                            'latitude': float(row.get('latitude', 0)),
+                            'longitude': float(row.get('longitude', 0)),
+                            'battery': int(float(row.get('battery', 0)))
+                        }
+        except Exception as e:
+            print(f"⚠️ Error loading helmets.csv: {e}")
 
 
 def main():

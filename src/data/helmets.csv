@@ -1,3 +1,2 @@
-id,latitude,longitude
-001,45.15615,10.79115
-002,45.15600,10.79000
+id,latitude,longitude,battery,is_dangerous
+001,45.15625955688212,10.79120439693574,84,0
