@@ -103,6 +103,29 @@ class Site:
                 
         return affected_sectors
 
+    def save_grid_to_csv(self, filepath):
+        """
+        Saves the current grid to a CSV file.
+        Format: sector_id, lat1, lon1, lat2, lon2, lat3, lon3, lat4, lon4
+        """
+        import csv
+        try:
+            with open(filepath, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["id", "p1_lat", "p1_lon", "p2_lat", "p2_lon", "p3_lat", "p3_lon", "p4_lat", "p4_lon"])
+                for sector in self.grid:
+                    v = sector.area_vertices.vertices
+                    writer.writerow([
+                        sector.id,
+                        v[0].latitude, v[0].longitude,
+                        v[1].latitude, v[1].longitude,
+                        v[2].latitude, v[2].longitude,
+                        v[3].latitude, v[3].longitude
+                    ])
+            print(f"✅ Grid saved to {filepath}")
+        except Exception as e:
+            print(f"❌ Failed to save grid to {filepath}: {e}")
+
     def to_json(self):
         return json.dumps(self, default=lambda o: o.__dict__)
     
@@ -111,13 +134,7 @@ class Sector:
     def __init__(self, id: str, area_vertices: AreaVertices):
         self.id = id
         self.area_vertices = area_vertices
-        self.status = 0 # 0 -> SAFE, 1 -> DANGEROUS
-
-    def set_safe(self):
-        self.status = 0
-
-    def set_dangerous(self):
-        self.status = 1
+        # Status removed, managed by Manager
 
     def to_json(self):
         return json.dumps(self, default=lambda o: o.__dict__)

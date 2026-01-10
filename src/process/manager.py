@@ -96,12 +96,14 @@ class DataCollectorManager:
             self.site = Site(AreaVertices([p1, p2, p3, p4]))
 
         self.site.create_grid(sector_size_meters=SECTOR_SIZE_METERS)
+        self.site.save_grid_to_csv(ROOT / "data" / "sectors.csv")
         
         # Map stations to affected sector IDs
         self.station_danger_zones = {} # {station_id: [sector_id, ...]}
         
         # Optimization States
         self.last_sent_zones = None # To avoid redundant updates
+        self.current_dangerous_sector_ids = set() # Set of sector IDs currently dangerous
         self.workers_in_danger = set() # Set of helmet_ids currently in danger
         self.siren_active = False # To avoid redundant siren commands
     
@@ -196,11 +198,8 @@ class DataCollectorManager:
         if station_id in self.station_danger_zones:
             old_sector_ids = self.station_danger_zones[station_id]
             for s_id in old_sector_ids:
-                # Find sector by ID (inefficient linear search, but ok for now)
-                # Ideally make grid a dict {id: sector}
-                for sector in self.site.grid:
-                    if sector.id == s_id:
-                        sector.set_safe()
+                if s_id in self.current_dangerous_sector_ids:
+                    self.current_dangerous_sector_ids.remove(s_id)
             del self.station_danger_zones[station_id]
 
         # 2. If dangerous, calculate new sectors and mark them
@@ -209,13 +208,13 @@ class DataCollectorManager:
             affected_ids = []
             
             for sector in affected_sectors:
-                sector.set_dangerous()
+                self.current_dangerous_sector_ids.add(sector.id)
                 affected_ids.append(sector.id)
             
             self.station_danger_zones[station_id] = affected_ids
         
         # 3. Send updated list of dangerous zones to Alarm Display ONLY if changed
-        all_dangerous_zones = sorted([s.id for s in self.site.grid if s.status == 1])
+        all_dangerous_zones = sorted(list(self.current_dangerous_sector_ids))
         
         # Compare with last sent
         if self.last_sent_zones != all_dangerous_zones:
@@ -308,7 +307,7 @@ class DataCollectorManager:
         sector = self.site.get_sector_by_coords(lat, lon)
         in_danger = False
         
-        if sector and sector.status == 1:
+        if sector and sector.id in self.current_dangerous_sector_ids:
             in_danger = True
             if helmet_id not in self.workers_in_danger:
                 print(f"🚨 ALERT: Worker {helmet_id} entered DANGEROUS Sector ({sector.id})!")
