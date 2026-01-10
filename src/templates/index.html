@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Construction Site Live Dashboard</title>
+    <!-- Modern UI dependencies -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        #header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 25px;
+            border-radius: 12px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0.5;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.5;
+            }
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .box {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="header">
+        <h1>
+            <div class="status-dot"></div> Live Site Monitor
+        </h1>
+        <div id="last-update" style="font-size: 0.8rem; opacity: 0.6; margin-top: 5px;">Connecting...</div>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="controls">
+        <div class="legend-item">
+            <div class="box" style="background: rgba(0,0,255,0.3); border: 1px solid blue;"></div> Safe Zone
+        </div>
+        <div class="legend-item">
+            <div class="box" style="background: rgba(255,0,0,0.4); border: 1px solid red;"></div> Danger Zone
+        </div>
+        <div class="legend-item">👷 Helmet</div>
+    </div>
+
+    <script>
+        let isFirstLoad = true;
+        let mapConfig = {
+            mapbox: {
+                style: "open-street-map",
+                center: { lat: 0, lon: 0 },
+                zoom: 18
+            },
+            margin: { r: 0, t: 0, l: 0, b: 0 },
+            showlegend: false
+        };
+
+        async function updateMap() {
+            try {
+                const response = await fetch('/api/data');
+                const data = await response.json();
+
+                let traces = [];
+                let centerLat = 0, centerLon = 0, sectorCount = 0;
+
+                // 1. Add Sector Traces
+                data.sectors.forEach(s => {
+                    const isDanger = s.status === 1;
+                    const lats = s.vertices.map(v => v[0]);
+                    const lons = s.vertices.map(v => v[1]);
+
+                    // Close the polygon
+                    lats.push(lats[0]);
+                    lons.push(lons[0]);
+
+                    if (isFirstLoad) {
+                        centerLat += lats.reduce((a, b) => a + b, 0) / lats.length;
+                        centerLon += lons.reduce((a, b) => a + b, 0) / lons.length;
+                        sectorCount++;
+                    }
+
+                    traces.push({
+                        type: "scattermapbox",
+                        mode: "lines",
+                        fill: "toself",
+                        fillcolor: isDanger ? "rgba(255,0,0,0.3)" : "rgba(0,0,255,0.05)",
+                        lat: lats,
+                        lon: lons,
+                        line: { color: isDanger ? "red" : "blue", width: 1 },
+                        hoverinfo: 'text',
+                        text: `Sector: ${s.id} | Status: ${isDanger ? 'DANGER' : 'Safe'}`
+                    });
+                });
+
+                // 2. Add Helmet Traces
+                data.helmets.forEach(h => {
+                    traces.push({
+                        type: "scattermapbox",
+                        mode: "markers+text",
+                        lat: [h.latitude],
+                        lon: [h.longitude],
+                        marker: {
+                            size: 14,
+                            color: h.is_dangerous ? "red" : "#7FFF00",
+                            opacity: 1
+                        },
+                        text: [`👷 ${h.id}`],
+                        textposition: "top center",
+                        textfont: { size: 14, color: 'white' },
+                        hoverinfo: 'text',
+                        hovertext: `Helmet: ${h.id}<br>Bat: ${h.battery}%<br>Status: ${h.is_dangerous ? '⚠ DANGER' : 'Safe'}`
+                    });
+                });
+
+                if (isFirstLoad && sectorCount > 0) {
+                    mapConfig.mapbox.center = { lat: centerLat / sectorCount, lon: centerLon / sectorCount };
+                    isFirstLoad = false;
+                } else {
+                    // Preserve current view
+                    const currentLayout = document.getElementById('map').layout;
+                    if (currentLayout && currentLayout.mapbox) {
+                        mapConfig.mapbox.center = currentLayout.mapbox.center;
+                        mapConfig.mapbox.zoom = currentLayout.mapbox.zoom;
+                    }
+                }
+
+                Plotly.react('map', traces, mapConfig, { responsive: true, displayModeBar: false });
+                document.getElementById('last-update').innerText = "Last Update: " + new Date().toLocaleTimeString();
+
+            } catch (err) {
+                console.error("Update failed:", err);
+            }
+        }
+
+        // Initialize and poll
+        updateMap();
+        setInterval(updateMap, 3000); // Poll every 3 seconds
+    </script>
+</body>
+
+</html>
