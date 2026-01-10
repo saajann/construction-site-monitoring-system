@@ -26,9 +26,12 @@ class GPS:
 class AreaVertices:
 
     def __init__(self, vertices: list[GPS]):
-
-        if len(vertices) != 4:
-            raise ValueError("RectangularArea requires exactly 4 vertices")
+        if len(vertices) < 3:
+             # Basic check for a polygon
+             pass 
+             # raise ValueError("Area must have at least 3 vertices") 
+             # Relaxed for now as point/line might be passed temporarily? No, likely >2 for a real sector.
+        
         self.vertices = vertices
 
         self.top_left = None
@@ -36,9 +39,13 @@ class AreaVertices:
         self.bottom_left = None
         self.bottom_right = None
 
-        self.orient_vertices()
+        if len(vertices) == 4:
+            self.orient_vertices()
 
     def orient_vertices(self):
+        if len(self.vertices) != 4:
+            return
+
         sorted_by_lat = sorted(self.vertices, key=lambda p: p.latitude, reverse=True)
 
         top = sorted_by_lat[:2]

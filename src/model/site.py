@@ -15,64 +15,88 @@ class Site:
 
     def create_grid(self, sector_size_meters=10.0):
         """
-        Divides the site area into a grid of sectors.
-        Assumes area_vertices describes a roughly rectangular area.
+        Divides the site area into a grid of sectors, clipping them to the site boundaries using Shapely.
         """
+        from shapely.geometry import Polygon, box
+        
+        # 1. Create Site Polygon
+        site_coords = [(p.latitude, p.longitude) for p in self.area_vertices.vertices]
+        if len(site_coords) < 3:
+            return # Invalid polygon
+        
+        site_poly = Polygon(site_coords)
+        if not site_poly.is_valid:
+            site_poly = site_poly.buffer(0) # Attempt to fix self-intersections
+
         # Get bounds
-        min_lat = min(p.latitude for p in self.area_vertices.vertices)
-        max_lat = max(p.latitude for p in self.area_vertices.vertices)
-        min_lon = min(p.longitude for p in self.area_vertices.vertices)
-        max_lon = max(p.longitude for p in self.area_vertices.vertices)
+        min_lat, min_lon, max_lat, max_lon = site_poly.bounds
 
-        # Earth radius approximation
+        # Earth radius approximation for meter conversion
         R = 6378137
-
-        # Calculate dimensions in meters
-        lat_diff = max_lat - min_lat
-        lon_diff = max_lon - min_lon
         
-        height_meters = lat_diff * (3.14159 / 180) * R
-        width_meters = lon_diff * (3.14159 / 180) * R * 0.7  # Cos approx (avg lat ~45)
-
-        rows = int(height_meters / sector_size_meters) + 1
-        cols = int(width_meters / sector_size_meters) + 1
+        # Calculate approximate dimensions in degrees
+        lat_diff_per_meter = (1 / ((2 * math.pi * R) / 360))
+        # Longitudinal degrees vary with latitude, use center lat for approx
+        center_lat = (min_lat + max_lat) / 2
+        lon_diff_per_meter = (1 / ((2 * math.pi * R * math.cos(math.radians(center_lat))) / 360))
         
-        # Calculate steps
-        lat_step = lat_diff / rows
-        lon_step = lon_diff / cols
+        step_lat = sector_size_meters * lat_diff_per_meter
+        step_lon = sector_size_meters * lon_diff_per_meter
+
+        rows = int((max_lat - min_lat) / step_lat) + 1
+        cols = int((max_lon - min_lon) / step_lon) + 1
 
         self.grid = []
 
         for r in range(rows):
             for c in range(cols):
-                # Calculate sector vertices
-                p1 = GPS(min_lat + r * lat_step, min_lon + c * lon_step)
-                p2 = GPS(min_lat + r * lat_step, min_lon + (c+1) * lon_step)
-                p3 = GPS(min_lat + (r+1) * lat_step, min_lon + (c+1) * lon_step)
-                p4 = GPS(min_lat + (r+1) * lat_step, min_lon + c * lon_step)
+                # Create grid cell polygon
+                cell_min_lat = min_lat + r * step_lat
+                cell_max_lat = min_lat + (r+1) * step_lat
+                cell_min_lon = min_lon + c * step_lon
+                cell_max_lon = min_lon + (c+1) * step_lon
                 
-                sector_vertices = AreaVertices([p1, p2, p3, p4])
+                # Shapely expects (x, y) -> (lat, lon) or (lon, lat). 
+                # Let's use (lat, lon) consistently for our geometric operations 
+                # BEWARE: Shapely usually treats cartesian, but for intersection logic it works if units are consistent.
+                cell_poly = box(cell_min_lat, cell_min_lon, cell_max_lat, cell_max_lon)
                 
-                # Create sector ID
-                sector_id = f"Zone-{r}-{c}"
+                # Intersect
+                intersection = site_poly.intersection(cell_poly)
                 
-                sector = Sector(sector_id, sector_vertices)
-                self.grid.append(sector)
+                if not intersection.is_empty and intersection.area > 1e-10: # Filter tiny slivers
+                    # If MultiPolygon (rare but possible with weird shapes), take biggest or all
+                    polys = [intersection] if intersection.geom_type == 'Polygon' else intersection.geoms
+                    
+                    for i, poly in enumerate(polys):
+                        # Extract coords
+                        # poly.exterior.coords returns list of (lat, lon)
+                        coords = list(poly.exterior.coords)
+                        # Create GPS points
+                        gps_vertices = [GPS(lat, lon) for lat, lon in coords]
+                        
+                        sector_vertices = AreaVertices(gps_vertices)
+                        
+                        # Create ID
+                        suffix = f"-{i}" if len(polys) > 1 else ""
+                        sector_id = f"Zone-{r}-{c}{suffix}"
+                        
+                        sector = Sector(sector_id, sector_vertices)
+                        self.grid.append(sector)
 
     def get_sector_by_coords(self, lat, lon):
         """Finds which sector contains the given coordinates"""
-        # Simple bounding box check (optimization possible with grid math)
+        # Linear search for point-in-polygon
+        # Optimization: use R-tree if many sectors, but linear ok for < 1000
+        from shapely.geometry import Point, Polygon
+        
+        point = Point(lat, lon)
+        
         for sector in self.grid:
-            # Check if point is inside sector
-            # Simplified: check against bounds of sector
-            v = sector.area_vertices.vertices
-             # Assuming rectangular and oriented
-            s_min_lat = min(p.latitude for p in v)
-            s_max_lat = max(p.latitude for p in v)
-            s_min_lon = min(p.longitude for p in v)
-            s_max_lon = max(p.longitude for p in v)
-
-            if s_min_lat <= lat <= s_max_lat and s_min_lon <= lon <= s_max_lon:
+            # Reconstruct polygon (cache this if performance needed)
+            coords = [(p.latitude, p.longitude) for p in sector.area_vertices.vertices]
+            poly = Polygon(coords)
+            if poly.contains(point):
                 return sector
         return None
 
@@ -80,25 +104,24 @@ class Site:
         """
         Returns a list of Sectors that fall within the radius.
         """
-        affected_sectors = []
+        # For simplicity in irregular grid, check distance to vertices or centroid
+        # Better: Buffer a point and intersect
+        from shapely.geometry import Point, Polygon
         
-        # Simple centroid distance check
+        # Approximate degrees radius
+        R = 6378137
+        deg_radius = (radius_meters / R) * (180 / math.pi) # Very rough approx
+        
+        center_point = Point(center_lat, center_lon)
+        # Using buffer with approximate degree distance
+        # NOTE: This implies spherical distortion ignore, acceptable for small site
+        search_area = center_point.buffer(deg_radius) 
+        
+        affected_sectors = []
         for sector in self.grid:
-             # Calculate centroid
-            v = sector.area_vertices.vertices
-            avg_lat = sum(p.latitude for p in v) / 4
-            avg_lon = sum(p.longitude for p in v) / 4
-            
-            # Distance calc (Haversine or simple flat earth for small area)
-            R = 6378137
-            d_lat = (avg_lat - center_lat) * (math.pi / 180) * R
-            d_lon = (avg_lon - center_lon) * (math.pi / 180) * R * math.cos(center_lat * math.pi / 180)
-            
-            dist = math.sqrt(d_lat**2 + d_lon**2)
-            
-            # Use radius + half sector diagonal (approx 7m for 10m sector) to be safe/inclusive
-            # or just simple radius check. Let's be slightly inclusive.
-            if dist <= radius_meters + 7.0: 
+            coords = [(p.latitude, p.longitude) for p in sector.area_vertices.vertices]
+            poly = Polygon(coords)
+            if search_area.intersects(poly):
                 affected_sectors.append(sector)
                 
         return affected_sectors
@@ -106,22 +129,17 @@ class Site:
     def save_grid_to_csv(self, filepath):
         """
         Saves the current grid to a CSV file.
-        Format: sector_id, lat1, lon1, lat2, lon2, lat3, lon3, lat4, lon4
+        Format: id, json_coords
+        json_coords example: [[lat,lon], [lat,lon], ...]
         """
         import csv
         try:
             with open(filepath, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(["id", "p1_lat", "p1_lon", "p2_lat", "p2_lon", "p3_lat", "p3_lon", "p4_lat", "p4_lon"])
+                writer.writerow(["id", "vertices_json"])
                 for sector in self.grid:
-                    v = sector.area_vertices.vertices
-                    writer.writerow([
-                        sector.id,
-                        v[0].latitude, v[0].longitude,
-                        v[1].latitude, v[1].longitude,
-                        v[2].latitude, v[2].longitude,
-                        v[3].latitude, v[3].longitude
-                    ])
+                    coords = [[p.latitude, p.longitude] for p in sector.area_vertices.vertices]
+                    writer.writerow([sector.id, json.dumps(coords)])
             print(f"✅ Grid saved to {filepath}")
         except Exception as e:
             print(f"❌ Failed to save grid to {filepath}: {e}")

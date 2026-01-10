@@ -19,17 +19,36 @@ def visualize_sectors():
 
     fig = go.Figure()
 
-    # Center of the map
-    center_lat = df['p1_lat'].mean()
-    center_lon = df['p1_lon'].mean()
+    # Calculate center
+    center_lat = 0
+    center_lon = 0
+    count = 0
+
+    import json
 
     # Draw each sector as a CLOSED polygon
     for _, row in df.iterrows():
-        # Coordinates for the rectangle (closing the loop by repeating the first point)
-        lats = [row['p1_lat'], row['p2_lat'], row['p3_lat'], row['p4_lat'], row['p1_lat']]
-        lons = [row['p1_lon'], row['p2_lon'], row['p3_lon'], row['p4_lon'], row['p1_lon']]
-        
         sector_id = row['id']
+        try:
+            coords = json.loads(row['vertices_json'])
+        except Exception as e:
+            print(f"⚠️ Error parsing geometry for {sector_id}: {e}")
+            continue
+            
+        if not coords:
+            continue
+
+        lats = [c[0] for c in coords]
+        lons = [c[1] for c in coords]
+        
+        # Close the loop if not closed
+        if lats[0] != lats[-1] or lons[0] != lons[-1]:
+            lats.append(lats[0])
+            lons.append(lons[0])
+            
+        center_lat += sum(lats) / len(lats)
+        center_lon += sum(lons) / len(lons)
+        count += 1
 
         # Add Polygon Trace
         fig.add_trace(go.Scattermapbox(
@@ -42,17 +61,10 @@ def visualize_sectors():
             hoverinfo='text',
             text=f"Sector: {sector_id}"
         ))
-        
-        # Add center label (invisible point just for text?) 
-        # Optional: Adds clutter if too many sectors.
-        # fig.add_trace(go.Scattermapbox(
-        #     mode="text",
-        #     lon=[sum(lons[:-1])/4],
-        #     lat=[sum(lats[:-1])/4],
-        #     text=[sector_id],
-        #     textposition="middle center",
-        #     showlegend=False
-        # ))
+
+    if count > 0:
+        center_lat /= count
+        center_lon /= count
 
     # Update Layout
     fig.update_layout(
