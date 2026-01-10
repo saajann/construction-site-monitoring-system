@@ -1,2 +1,2 @@
-id,latitude,longitude
-001,45.1561,10.7911
+id,latitude,longitude,is_dangerous
+001,45.1561,10.7911,1

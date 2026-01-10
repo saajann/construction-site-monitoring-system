@@ -99,6 +99,7 @@ class DataCollectorManager:
         
         # Internal States for Tracking
         self.helmet_states = {} # {id: {latitude, longitude, battery, ...}}
+        self.station_states = {} # {id: {latitude, longitude, is_dangerous, ...}}
         self.station_danger_zones = {} # {station_id: [sector_id, ...]}
         self.current_dangerous_sector_ids = set() # Set of sector IDs currently dangerous
         self.workers_in_danger = set() # Set of helmet_ids currently in danger
@@ -106,8 +107,10 @@ class DataCollectorManager:
         self.siren_active = False # To avoid redundant siren commands
         
         self._load_helmets_from_csv()
+        self._load_stations_from_csv()
         self.update_sectors_csv() # Initial save
         self.update_helmets_csv() # Initial save with header
+        self.update_stations_csv() # Initial save with header
     
     def on_connect(self, client, userdata, flags, rc):
         """Callback when connected to MQTT broker"""
@@ -142,6 +145,7 @@ class DataCollectorManager:
                 self.update_helmets_csv()
             elif f"/{TOPIC_STATION}/" in topic:
                 self._handle_station_message(topic, payload)
+                self.update_stations_csv()
             
         except json.JSONDecodeError as e:
             print(f"❌ JSON decode error: {e}")
@@ -178,6 +182,15 @@ class DataCollectorManager:
             danger_reasons.append(f"Gas ({gas})")
 
         # Dynamic Grid Update
+        if station_id not in self.station_states:
+            self.station_states[station_id] = {}
+        
+        self.station_states[station_id].update({
+            'latitude': lat,
+            'longitude': lon,
+            'is_dangerous': is_dangerous
+        })
+        
         self._update_station_danger_zone(station_id, lat, lon, is_dangerous)
 
         status_icon = "🟢" if not is_dangerous else "🔴"
@@ -450,6 +463,44 @@ class DataCollectorManager:
                         }
         except Exception as e:
             print(f"⚠️ Error loading helmets.csv: {e}")
+
+    def update_stations_csv(self):
+        """
+        Saves current station positions and states to stations.csv
+        Format: id, latitude, longitude, is_dangerous
+        """
+        import csv
+        filepath = ROOT / "data" / "stations.csv"
+        try:
+            with open(filepath, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["id", "latitude", "longitude", "is_dangerous"])
+                for station_id, state in self.station_states.items():
+                    lat = state.get("latitude", 0)
+                    lon = state.get("longitude", 0)
+                    is_dangerous = 1 if state.get("is_dangerous", False) else 0
+                    writer.writerow([station_id, lat, lon, is_dangerous])
+        except Exception as e:
+            print(f"❌ Failed to save stations.csv: {e}")
+
+    def _load_stations_from_csv(self):
+        """Loads initial station data from CSV to avoid wiping config"""
+        filepath = ROOT / "data" / "stations.csv"
+        if not filepath.exists():
+            return
+        try:
+            with open(filepath, newline='') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    s_id = row.get('id')
+                    if s_id:
+                        self.station_states[s_id] = {
+                            'latitude': float(row.get('latitude', 0)),
+                            'longitude': float(row.get('longitude', 0)),
+                            'is_dangerous': int(row.get('is_dangerous', 0)) == 1
+                        }
+        except Exception as e:
+            print(f"⚠️ Error loading stations.csv: {e}")
 
 
 def main():

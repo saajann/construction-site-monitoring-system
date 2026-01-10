@@ -59,6 +59,26 @@ def get_data():
         except Exception as e:
             print(f"Error reading helmets.csv: {e}")
             
+    # Load stations
+    data["stations"] = []
+    stations_csv = DATA_DIR / "stations.csv"
+    if stations_csv.exists():
+        try:
+            df_stations = pd.read_csv(stations_csv)
+            for _, row in df_stations.iterrows():
+                lat = row["latitude"]
+                lon = row["longitude"]
+                if pd.isna(lat) or pd.isna(lon):
+                    continue
+                data["stations"].append({
+                    "id": row["id"],
+                    "latitude": float(lat),
+                    "longitude": float(lon),
+                    "is_dangerous": int(row.get("is_dangerous", 0)) == 1
+                })
+        except Exception as e:
+            print(f"Error reading stations.csv: {e}")
+            
     return jsonify(data)
 
 if __name__ == "__main__":

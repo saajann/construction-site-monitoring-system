@@ -110,6 +110,7 @@
             <div class="box" style="background: rgba(255,0,0,0.4); border: 1px solid red;"></div> Danger Zone
         </div>
         <div class="legend-item">👷 Helmet</div>
+        <div class="legend-item">📡 Station</div>
     </div>
 
     <script>
@@ -123,6 +124,25 @@
             margin: { r: 0, t: 0, l: 0, b: 0 },
             showlegend: false
         };
+
+        // Helper to generate circle vertices for Plotly (approx 10m range)
+        function generateCircle(lat, lon, radiusMeters = 10) {
+            const points = 32;
+            const lats = [];
+            const lons = [];
+            const kmPerDegreeLat = 111.32;
+            const kmPerDegreeLon = 40075 * Math.cos(lat * Math.PI / 180) / 360;
+
+            for (let i = 0; i <= points; i++) {
+                const angle = (i / points) * 2 * Math.PI;
+                const dx = (radiusMeters / 1000) * Math.cos(angle);
+                const dy = (radiusMeters / 1000) * Math.sin(angle);
+
+                lats.push(lat + (dy / kmPerDegreeLat));
+                lons.push(lon + (dx / kmPerDegreeLon));
+            }
+            return { lats, lons };
+        }
 
         async function updateMap() {
             try {
@@ -180,6 +200,45 @@
                         hovertext: `Helmet: ${h.id}<br>Bat: ${h.battery}%<br>Status: ${h.is_dangerous ? '⚠ DANGER' : 'Safe'}`
                     });
                 });
+
+                // 3. Add Station Traces (Circles for range + Markers)
+                if (data.stations) {
+                    data.stations.forEach(s => {
+                        const circle = generateCircle(s.latitude, s.longitude, 10);
+                        const color = s.is_dangerous ? "rgba(255,0,0,0.4)" : "rgba(46,204,113,0.3)";
+                        const stroke = s.is_dangerous ? "red" : "#2ecc71";
+
+                        // Range Circle
+                        traces.push({
+                            type: "scattermapbox",
+                            mode: "lines",
+                            fill: "toself",
+                            fillcolor: color,
+                            lat: circle.lats,
+                            lon: circle.lons,
+                            line: { color: stroke, width: 2 },
+                            hoverinfo: 'skip'
+                        });
+
+                        // Station Icon
+                        traces.push({
+                            type: "scattermapbox",
+                            mode: "markers+text",
+                            lat: [s.latitude],
+                            lon: [s.longitude],
+                            marker: {
+                                size: 10,
+                                color: "white",
+                                opacity: 1
+                            },
+                            text: [`📡 ${s.id}`],
+                            textposition: "top center",
+                            textfont: { size: 14, color: 'white' },
+                            hoverinfo: 'text',
+                            hovertext: `Station: ${s.id}<br>Status: ${s.is_dangerous ? '⚠ DANGER' : 'OK'}`
+                        });
+                    });
+                }
 
                 if (isFirstLoad && sectorCount > 0) {
                     mapConfig.mapbox.center = { lat: centerLat / sectorCount, lon: centerLon / sectorCount };
