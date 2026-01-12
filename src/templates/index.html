@@ -89,6 +89,36 @@
             height: 12px;
             border-radius: 2px;
         }
+
+        #alarm-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(255, 0, 0, 0.9);
+            padding: 15px 25px;
+            border-radius: 12px;
+            backdrop-filter: blur(8px);
+            border: 2px solid red;
+            display: none;
+            animation: pulse-alarm 1s infinite;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        @keyframes pulse-alarm {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.7;
+                transform: scale(1.05);
+            }
+        }
     </style>
 </head>
 
@@ -98,6 +128,10 @@
             <div class="status-dot"></div> Live Site Monitor
         </h1>
         <div id="last-update" style="font-size: 0.8rem; opacity: 0.6; margin-top: 5px;">Connecting...</div>
+    </div>
+
+    <div id="alarm-indicator">
+        🚨 ALARM ACTIVE - WORKER IN DANGER ZONE!
     </div>
 
     <div id="map"></div>
@@ -115,14 +149,103 @@
         <div class="legend-item">
             <div class="box" style="background: yellow; border: 1px solid #d4af37;"></div> 👷 Charging (Yellow)
         </div>
-        <div class="legend-item">
-            <div class="box" style="background: red; border: 1px solid #8b0000;"></div> 👷 Danger (Red)
-        </div>
         <div class="legend-item">📡 Station</div>
     </div>
 
     <script>
         let isFirstLoad = true;
+        let alarmAudioContext = null;
+        let alarmOscillator = null;
+        let alarmGainNode = null;
+        let isAlarmSounding = false;
+        let lastAlarmState = false;
+
+        // Initialize Web Audio API for alarm sound
+        function initAudio() {
+            if (!alarmAudioContext) {
+                alarmAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        // Play alarm sound (siren-like)
+        function startAlarmSound() {
+            if (isAlarmSounding) return;
+
+            initAudio();
+            isAlarmSounding = true;
+
+            // Create oscillator for siren sound
+            alarmOscillator = alarmAudioContext.createOscillator();
+            alarmGainNode = alarmAudioContext.createGain();
+
+            alarmOscillator.connect(alarmGainNode);
+            alarmGainNode.connect(alarmAudioContext.destination);
+
+            alarmOscillator.type = 'sine';
+            alarmGainNode.gain.value = 0.3;
+
+            // Modulate frequency for siren effect
+            const now = alarmAudioContext.currentTime;
+            alarmOscillator.frequency.setValueAtTime(800, now);
+            alarmOscillator.frequency.linearRampToValueAtTime(400, now + 0.5);
+            alarmOscillator.frequency.linearRampToValueAtTime(800, now + 1);
+
+            alarmOscillator.start();
+
+            // Loop the siren
+            setTimeout(() => {
+                if (isAlarmSounding) {
+                    stopAlarmSound();
+                    startAlarmSound();
+                }
+            }, 1000);
+        }
+
+        // Stop alarm sound
+        function stopAlarmSound() {
+            if (!isAlarmSounding) return;
+
+            isAlarmSounding = false;
+            if (alarmOscillator) {
+                alarmOscillator.stop();
+                alarmOscillator.disconnect();
+                alarmOscillator = null;
+            }
+            if (alarmGainNode) {
+                alarmGainNode.disconnect();
+                alarmGainNode = null;
+            }
+        }
+
+        // Check alarm status
+        async function checkAlarmStatus() {
+            try {
+                const response = await fetch('/api/alarm_status');
+                const data = await response.json();
+                const alarmActive = data.alarm_active;
+
+                // Update visual indicator
+                const indicator = document.getElementById('alarm-indicator');
+                if (alarmActive) {
+                    indicator.style.display = 'block';
+                    if (!lastAlarmState) {
+                        // Alarm just activated
+                        startAlarmSound();
+                    }
+                } else {
+                    indicator.style.display = 'none';
+                    if (lastAlarmState) {
+                        // Alarm just deactivated
+                        stopAlarmSound();
+                    }
+                }
+
+                lastAlarmState = alarmActive;
+            } catch (err) {
+                console.error("Failed to check alarm status:", err);
+            }
+        }
+
         let mapConfig = {
             mapbox: {
                 style: "open-street-map",
@@ -195,9 +318,6 @@
 
                     if (h.led === 1) {
                         markerColor = "yellow";
-                    }
-                    if (h.is_dangerous === true) {
-                        markerColor = "red";
                     }
 
                     traces.push({
@@ -279,7 +399,9 @@
 
         // Initialize and poll
         updateMap();
+        checkAlarmStatus();
         setInterval(updateMap, 3000); // Poll every 3 seconds
+        setInterval(checkAlarmStatus, 1000); // Check alarm every 1 second
     </script>
 </body>
 

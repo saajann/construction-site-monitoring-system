@@ -111,6 +111,7 @@ class DataCollectorManager:
         self.update_sectors_csv() # Initial save
         self.update_helmets_csv() # Initial save with header
         self.update_stations_csv() # Initial save with header
+        self.update_alarm_status_csv() # Initial save with header
     
     def on_connect(self, client, userdata, flags, rc):
         """Callback when connected to MQTT broker"""
@@ -341,11 +342,13 @@ class DataCollectorManager:
             print(f"📢 DANGER ACTIVE (Workers: {len(self.workers_in_danger)}) -> SIREN ON")
             self._send_alarm_command("alarm_001", "turn_siren_on")
             self.siren_active = True
+            self.update_alarm_status_csv()  # Update alarm status file
             
         elif not should_siren_be_on and self.siren_active:
             print(f"🟢 ALL CLEAR -> SIREN OFF")
             self._send_alarm_command("alarm_001", "turn_siren_off")
             self.siren_active = False
+            self.update_alarm_status_csv()  # Update alarm status file
     
     def _check_helmet_battery(self, helmet_id, battery, current_led_status):
         """
@@ -434,14 +437,13 @@ class DataCollectorManager:
         try:
             with open(filepath, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(["id", "latitude", "longitude", "battery", "led", "is_dangerous"])
+                writer.writerow(["id", "latitude", "longitude", "battery", "led"])
                 for helmet_id, state in self.helmet_states.items():
                     lat = state.get("latitude", 0)
                     lon = state.get("longitude", 0)
                     battery = state.get("battery", 0)
                     led = state.get("led", 0)
-                    is_dangerous = 1 if helmet_id in self.workers_in_danger else 0
-                    writer.writerow([helmet_id, lat, lon, battery, led, is_dangerous])
+                    writer.writerow([helmet_id, lat, lon, battery, led])
             # print(f"    [MGR] 💾 Saved helmets.csv")
         except Exception as e:
             print(f"❌ Failed to save helmets.csv: {e}")
@@ -503,6 +505,21 @@ class DataCollectorManager:
                         }
         except Exception as e:
             print(f"⚠️ Error loading stations.csv: {e}")
+
+    def update_alarm_status_csv(self):
+        """
+        Saves current alarm status to alarm_status.csv
+        Format: alarm_active
+        """
+        import csv
+        filepath = ROOT / "data" / "alarm_status.csv"
+        try:
+            with open(filepath, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["alarm_active"])
+                writer.writerow([1 if self.siren_active else 0])
+        except Exception as e:
+            print(f"❌ Failed to save alarm_status.csv: {e}")
 
 
 def main():

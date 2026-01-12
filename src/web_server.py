@@ -54,8 +54,7 @@ def get_data():
                     "latitude": float(lat),
                     "longitude": float(lon),
                     "battery": int(row["battery"]) if not pd.isna(row.get("battery")) else 0,
-                    "led": int(row["led"]) if not pd.isna(row.get("led")) else 0,
-                    "is_dangerous": bool(row.get("is_dangerous", 0) == 1)
+                    "led": int(row["led"]) if not pd.isna(row.get("led")) else 0
                 })
         except Exception as e:
             print(f"Error reading helmets.csv: {e}")
@@ -81,6 +80,22 @@ def get_data():
             print(f"Error reading stations.csv: {e}")
             
     return jsonify(data)
+
+@app.route("/api/alarm_status")
+def get_alarm_status():
+    """API endpoint to get alarm status"""
+    alarm_csv = DATA_DIR / "alarm_status.csv"
+    alarm_active = False
+    
+    if alarm_csv.exists():
+        try:
+            df_alarm = pd.read_csv(alarm_csv)
+            if not df_alarm.empty:
+                alarm_active = bool(df_alarm.iloc[0]["alarm_active"] == 1)
+        except Exception as e:
+            print(f"Error reading alarm_status.csv: {e}")
+    
+    return jsonify({"alarm_active": alarm_active})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)
