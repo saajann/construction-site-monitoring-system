@@ -74,6 +74,9 @@ def get_data():
                     "id": row["id"],
                     "latitude": float(lat),
                     "longitude": float(lon),
+                    "dust": float(row.get("dust", 0)) if not pd.isna(row.get("dust")) else 0,
+                    "noise": float(row.get("noise", 0)) if not pd.isna(row.get("noise")) else 0,
+                    "gas": float(row.get("gas", 0)) if not pd.isna(row.get("gas")) else 0,
                     "is_dangerous": int(row.get("is_dangerous", 0)) == 1
                 })
         except Exception as e:

@@ -189,6 +189,9 @@ class DataCollectorManager:
         self.station_states[station_id].update({
             'latitude': lat,
             'longitude': lon,
+            'dust': dust,
+            'noise': noise,
+            'gas': gas,
             'is_dangerous': is_dangerous
         })
         
@@ -478,12 +481,15 @@ class DataCollectorManager:
         try:
             with open(filepath, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(["id", "latitude", "longitude", "is_dangerous"])
+                writer.writerow(["id", "latitude", "longitude", "dust", "noise", "gas", "is_dangerous"])
                 for station_id, state in self.station_states.items():
                     lat = state.get("latitude", 0)
                     lon = state.get("longitude", 0)
+                    dust = state.get("dust", 0)
+                    noise = state.get("noise", 0)
+                    gas = state.get("gas", 0)
                     is_dangerous = 1 if state.get("is_dangerous", False) else 0
-                    writer.writerow([station_id, lat, lon, is_dangerous])
+                    writer.writerow([station_id, lat, lon, dust, noise, gas, is_dangerous])
         except Exception as e:
             print(f"❌ Failed to save stations.csv: {e}")
 

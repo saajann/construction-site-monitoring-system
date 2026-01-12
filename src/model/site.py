@@ -108,13 +108,17 @@ class Site:
         # Better: Buffer a point and intersect
         from shapely.geometry import Point, Polygon
         
-        # Approximate degrees radius
-        R = 6378137
-        deg_radius = (radius_meters / R) * (180 / math.pi) # Very rough approx
+        # Correct conversion from meters to degrees
+        # 1 degree latitude ≈ 111,000 meters
+        # 1 degree longitude ≈ 111,000 * cos(latitude) meters
+        lat_deg_per_meter = 1.0 / 111000.0
+        lon_deg_per_meter = 1.0 / (111000.0 * math.cos(math.radians(center_lat)))
+        
+        # Use average for circular approximation
+        avg_deg_per_meter = (lat_deg_per_meter + lon_deg_per_meter) / 2
+        deg_radius = radius_meters * avg_deg_per_meter
         
         center_point = Point(center_lat, center_lon)
-        # Using buffer with approximate degree distance
-        # NOTE: This implies spherical distortion ignore, acceptable for small site
         search_area = center_point.buffer(deg_radius) 
         
         affected_sectors = []

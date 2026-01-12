@@ -334,7 +334,7 @@
                         textposition: "top center",
                         textfont: { size: 14, color: 'white' },
                         hoverinfo: 'text',
-                        hovertext: `Helmet: ${h.id}<br>Bat: ${h.battery}%<br>Status: ${h.is_dangerous ? '⚠ DANGER' : 'Safe'}`
+                        hovertext: `Helmet: ${h.id}<br>Battery: ${h.battery}%`
                     });
                 });
 
@@ -372,7 +372,7 @@
                             textposition: "top center",
                             textfont: { size: 14, color: 'white' },
                             hoverinfo: 'text',
-                            hovertext: `Station: ${s.id}<br>Status: ${s.is_dangerous ? '⚠ DANGER' : 'OK'}`
+                            hovertext: `Station: ${s.id}<br>Dust: ${s.dust.toFixed(1)}<br>Noise: ${s.noise.toFixed(1)}<br>Gas: ${s.gas.toFixed(2)}<br>Status: ${s.is_dangerous ? '⚠ DANGER' : 'OK'}`
                         });
                     });
                 }

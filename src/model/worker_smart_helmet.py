@@ -53,13 +53,37 @@ class WorkerSmartHelmet:
         new_lat = self.position.latitude + d_lat
         new_lon = self.position.longitude + d_lon
 
-        # Boundary control: keep the helmet inside the site area
-        if self.boundaries:
-            new_lat = max(self.boundaries["min_lat"], min(new_lat, self.boundaries["max_lat"]))
-            new_lon = max(self.boundaries["min_lon"], min(new_lon, self.boundaries["max_lon"]))
+        # Boundary control: keep the helmet inside the site area (polygon)
+        if self.boundaries and 'polygon' in self.boundaries:
+            # Check if new position is inside polygon
+            if not self._point_in_polygon(new_lat, new_lon, self.boundaries['polygon']):
+                # If outside, don't move
+                return
 
         self.position.update_latitude(new_lat)
         self.position.update_longitude(new_lon)
+    
+    def _point_in_polygon(self, lat, lon, polygon):
+        """
+        Ray casting algorithm to check if point is inside polygon
+        polygon: list of (lat, lon) tuples
+        """
+        n = len(polygon)
+        inside = False
+        
+        p1_lat, p1_lon = polygon[0]
+        for i in range(1, n + 1):
+            p2_lat, p2_lon = polygon[i % n]
+            if lon > min(p1_lon, p2_lon):
+                if lon <= max(p1_lon, p2_lon):
+                    if lat <= max(p1_lat, p2_lat):
+                        if p1_lon != p2_lon:
+                            x_intersection = (lon - p1_lon) * (p2_lat - p1_lat) / (p2_lon - p1_lon) + p1_lat
+                        if p1_lat == p2_lat or lat <= x_intersection:
+                            inside = not inside
+            p1_lat, p1_lon = p2_lat, p2_lon
+        
+        return inside
     
     def info(self):
         # return json of info

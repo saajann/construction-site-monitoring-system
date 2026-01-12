@@ -37,21 +37,16 @@ SITE_CSV_PATH = ROOT / "data" / "site.csv"
 
 
 def load_site_boundaries(csv_path):
-    """Load site boundaries from CSV and return min/max lat/lon"""
-    lats = []
-    lons = []
+    """Load site boundaries from CSV and return polygon vertices"""
+    polygon = []
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            lats.append(float(row["latitude"]))
-            lons.append(float(row["longitude"]))
+            lat = float(row["latitude"])
+            lon = float(row["longitude"])
+            polygon.append((lat, lon))
     
-    return {
-        "min_lat": min(lats),
-        "max_lat": max(lats),
-        "min_lon": min(lons),
-        "max_lon": max(lons)
-    }
+    return {"polygon": polygon}
 
 
 def on_connect(client, userdata, flags, rc):
