@@ -41,23 +41,17 @@ TOPIC_MANAGER = os.getenv("TOPIC_MANAGER")
 TOPIC_STATION = os.getenv("TOPIC_STATION")
 TOPIC_ALARM = os.getenv("TOPIC_ALARM")
 
+# Battery limits
+BATTERY_LOW_LIMIT = int(os.getenv("BATTERY_LOW_LIMIT", 10))
+BATTERY_FULL_LIMIT = int(os.getenv("BATTERY_FULL_LIMIT", 100))
 
-
-# Battery thresholds
-BATTERY_LOW_THRESHOLD = 10
-BATTERY_FULL_THRESHOLD = 100
-
-# Environmental Thresholds
-DUST_THRESHOLD = 50.0
-NOISE_THRESHOLD = 50.0
-GAS_THRESHOLD = 1.0 # Presence of gas
+# Environmental Limits
+DUST_LIMIT = float(os.getenv("DUST_LIMIT", 50.0))
+NOISE_LIMIT = float(os.getenv("NOISE_LIMIT", 50.0))
+GAS_LIMIT = float(os.getenv("GAS_LIMIT", 1.0)) # Presence of gas
 
 # Grid Configuration
-# Origin point for the construction site grid (0,0)
-# Adjust these coordinates to the actual site location if needed
-SITE_ORIGIN_LAT = 45.156
-SITE_ORIGIN_LON = 10.791
-SECTOR_SIZE_METERS = 10.0 # Each sector is 10x10 meters
+SECTOR_SIZE_METERS = float(os.getenv("SECTOR_SIZE_METERS", 10.0))
 
 
 class DataCollectorManager:
@@ -89,10 +83,14 @@ class DataCollectorManager:
         except Exception as e:
             print(f"⚠️  Failed to load site.csv: {e}. Using default values.")
             # Fallback to hardcoded (100x100m approximate area)
-            p1 = GPS(SITE_ORIGIN_LAT, SITE_ORIGIN_LON)
-            p2 = GPS(SITE_ORIGIN_LAT, SITE_ORIGIN_LON + 0.0012)
-            p3 = GPS(SITE_ORIGIN_LAT + 0.0009, SITE_ORIGIN_LON + 0.0012)
-            p4 = GPS(SITE_ORIGIN_LAT + 0.0009, SITE_ORIGIN_LON)
+            # Try to get from env or use defaults
+            fallback_lat = float(os.getenv("SITE_ORIGIN_LAT", 45.156))
+            fallback_lon = float(os.getenv("SITE_ORIGIN_LON", 10.791))
+            
+            p1 = GPS(fallback_lat, fallback_lon)
+            p2 = GPS(fallback_lat, fallback_lon + 0.0012)
+            p3 = GPS(fallback_lat + 0.0009, fallback_lon + 0.0012)
+            p4 = GPS(fallback_lat + 0.0009, fallback_lon)
             self.site = Site(AreaVertices([p1, p2, p3, p4]))
 
         self.site.create_grid(sector_size_meters=SECTOR_SIZE_METERS)
@@ -172,13 +170,13 @@ class DataCollectorManager:
         is_dangerous = False
         danger_reasons = []
         
-        if dust > DUST_THRESHOLD:
+        if dust > DUST_LIMIT:
             is_dangerous = True
             danger_reasons.append(f"Dust ({dust})")
-        if noise > NOISE_THRESHOLD:
+        if noise > NOISE_LIMIT:
             is_dangerous = True
             danger_reasons.append(f"Noise ({noise})")
-        if gas > GAS_THRESHOLD:
+        if gas > GAS_LIMIT:
             is_dangerous = True
             danger_reasons.append(f"Gas ({gas})")
 
@@ -364,12 +362,12 @@ class DataCollectorManager:
             return
         
         # Battery LOW: activate charging mode (LED ON)
-        if battery < BATTERY_LOW_THRESHOLD and current_led_status == 0:
+        if battery < BATTERY_LOW_LIMIT and current_led_status == 0:
             print(f"    🔋 LOW BATTERY ({battery}%) -> CMD: CHARGE ON")
             self._send_led_command(helmet_id, 1)
         
         # Battery FULL: deactivate charging mode (LED OFF)
-        elif battery >= BATTERY_FULL_THRESHOLD and current_led_status == 1:
+        elif battery >= BATTERY_FULL_LIMIT and current_led_status == 1:
             print(f"    🔋 BATTERY FULL ({battery}%) -> CMD: CHARGE OFF")
             self._send_led_command(helmet_id, 0)
         
