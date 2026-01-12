@@ -82,23 +82,18 @@ def get_data():
         except Exception as e:
             print(f"Error reading stations.csv: {e}")
             
-    return jsonify(data)
-
-@app.route("/api/alarm_status")
-def get_alarm_status():
-    """API endpoint to get alarm status"""
+    # Load alarm status
     alarm_csv = DATA_DIR / "alarm_status.csv"
-    alarm_active = False
-    
+    data["alarm_active"] = False
     if alarm_csv.exists():
         try:
             df_alarm = pd.read_csv(alarm_csv)
             if not df_alarm.empty:
-                alarm_active = bool(df_alarm.iloc[0]["alarm_active"] == 1)
+                data["alarm_active"] = bool(df_alarm.iloc[0]["alarm_active"] == 1)
         except Exception as e:
             print(f"Error reading alarm_status.csv: {e}")
-    
-    return jsonify({"alarm_active": alarm_active})
+            
+    return jsonify(data)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)

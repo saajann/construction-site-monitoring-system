@@ -103,10 +103,10 @@ class Site:
     def get_sectors_in_radius(self, center_lat, center_lon, radius_meters):
         """
         Returns a list of Sectors that fall within the radius.
+        Uses elliptical buffer to account for lat/lon scaling differences.
         """
-        # For simplicity in irregular grid, check distance to vertices or centroid
-        # Better: Buffer a point and intersect
         from shapely.geometry import Point, Polygon
+        from shapely import affinity
         
         # Correct conversion from meters to degrees
         # 1 degree latitude ≈ 111,000 meters
@@ -114,12 +114,21 @@ class Site:
         lat_deg_per_meter = 1.0 / 111000.0
         lon_deg_per_meter = 1.0 / (111000.0 * math.cos(math.radians(center_lat)))
         
-        # Use average for circular approximation
-        avg_deg_per_meter = (lat_deg_per_meter + lon_deg_per_meter) / 2
-        deg_radius = radius_meters * avg_deg_per_meter
-        
+        # Create elliptical buffer by scaling
         center_point = Point(center_lat, center_lon)
-        search_area = center_point.buffer(deg_radius) 
+        
+        # Scale radius differently for lat and lon to create proper circle
+        lat_radius = radius_meters * lat_deg_per_meter
+        lon_radius = radius_meters * lon_deg_per_meter
+        
+        # Create ellipse by buffering with average then scaling
+        avg_radius = (lat_radius + lon_radius) / 2
+        circle = center_point.buffer(avg_radius)
+        
+        # Scale to create ellipse that represents true circular distance
+        scale_x = lat_radius / avg_radius
+        scale_y = lon_radius / avg_radius
+        search_area = affinity.scale(circle, xfact=scale_x, yfact=scale_y)
         
         affected_sectors = []
         for sector in self.grid:

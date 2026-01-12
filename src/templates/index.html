@@ -218,32 +218,24 @@
         }
 
         // Check alarm status
-        async function checkAlarmStatus() {
-            try {
-                const response = await fetch('/api/alarm_status');
-                const data = await response.json();
-                const alarmActive = data.alarm_active;
-
-                // Update visual indicator
-                const indicator = document.getElementById('alarm-indicator');
-                if (alarmActive) {
-                    indicator.style.display = 'block';
-                    if (!lastAlarmState) {
-                        // Alarm just activated
-                        startAlarmSound();
-                    }
-                } else {
-                    indicator.style.display = 'none';
-                    if (lastAlarmState) {
-                        // Alarm just deactivated
-                        stopAlarmSound();
-                    }
+        async function checkAlarmStatus(alarmActive) {
+            // Update visual indicator
+            const indicator = document.getElementById('alarm-indicator');
+            if (alarmActive) {
+                indicator.style.display = 'block';
+                if (!lastAlarmState) {
+                    // Alarm just activated
+                    startAlarmSound();
                 }
-
-                lastAlarmState = alarmActive;
-            } catch (err) {
-                console.error("Failed to check alarm status:", err);
+            } else {
+                indicator.style.display = 'none';
+                if (lastAlarmState) {
+                    // Alarm just deactivated
+                    stopAlarmSound();
+                }
             }
+
+            lastAlarmState = alarmActive;
         }
 
         let mapConfig = {
@@ -257,21 +249,24 @@
         };
 
         // Helper to generate circle vertices for Plotly (approx 10m range)
-        function generateCircle(lat, lon, radiusMeters = 10) {
-            const points = 32;
+        function generateCircle(centerLat, centerLon, radiusMeters) {
+            const points = 64;
             const lats = [];
             const lons = [];
-            const kmPerDegreeLat = 111.32;
-            const kmPerDegreeLon = 40075 * Math.cos(lat * Math.PI / 180) / 360;
+
+            // Use same conversion as backend: 1 degree ≈ 111,000 meters
+            const latDegPerMeter = 1.0 / 111000.0;
+            const lonDegPerMeter = 1.0 / (111000.0 * Math.cos(centerLat * Math.PI / 180));
 
             for (let i = 0; i <= points; i++) {
                 const angle = (i / points) * 2 * Math.PI;
-                const dx = (radiusMeters / 1000) * Math.cos(angle);
-                const dy = (radiusMeters / 1000) * Math.sin(angle);
-
-                lats.push(lat + (dy / kmPerDegreeLat));
-                lons.push(lon + (dx / kmPerDegreeLon));
+                // Use proper scaling for each direction to make circle appear circular
+                const lat = centerLat + radiusMeters * latDegPerMeter * Math.cos(angle);
+                const lon = centerLon + radiusMeters * lonDegPerMeter * Math.sin(angle);
+                lats.push(lat);
+                lons.push(lon);
             }
+
             return { lats, lons };
         }
 
@@ -279,6 +274,9 @@
             try {
                 const response = await fetch('/api/data');
                 const data = await response.json();
+
+                // Check alarm status from data
+                checkAlarmStatus(data.alarm_active || false);
 
                 let traces = [];
                 let centerLat = 0, centerLon = 0, sectorCount = 0;
@@ -399,9 +397,7 @@
 
         // Initialize and poll
         updateMap();
-        checkAlarmStatus();
-        setInterval(updateMap, 3000); // Poll every 3 seconds
-        setInterval(checkAlarmStatus, 1000); // Check alarm every 1 second
+        setInterval(updateMap, 3000); // Poll every 3 seconds (includes alarm check)
     </script>
 </body>
 
