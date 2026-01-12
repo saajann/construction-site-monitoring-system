@@ -1,7 +1,7 @@
-# src/dashboard_terminal.py
+# src/dashboard.py
 """
-Terminal-based Real-time Dashboard
-No external UI libraries - just beautiful terminal output
+Terminal-based Real-time Dashboard (Pure MQTT version)
+Monitors 4 major topics: Helmet Telemetry, Station Telemetry, Helmet Commands, and Alarm Commands.
 """
 
 import paho.mqtt.client as mqtt
@@ -12,6 +12,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import time
 import threading
+from collections import deque
 
 load_dotenv()
 
@@ -27,9 +28,10 @@ TOPIC_STATION = os.getenv("TOPIC_STATION")
 TOPIC_MANAGER = os.getenv("TOPIC_MANAGER")
 TOPIC_ALARM = os.getenv("TOPIC_ALARM")
 
-# Global data
+# Global data (Thread-safe)
 helmets_data = {}
 stations_data = {}
+command_log = deque(maxlen=10) # Store last 10 commands
 alarm_state = {
     'siren': False,
     'zones': []
@@ -50,6 +52,7 @@ class Colors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
     END = '\033[0m'
+    GRAY = '\033[90m'
 
 def clear_screen():
     """Clear terminal screen"""
@@ -57,6 +60,7 @@ def clear_screen():
 
 def get_battery_bar(battery, width=15):
     """Generate a visual battery bar"""
+    battery = max(0, min(100, battery))
     filled = int((battery / 100) * width)
     empty = width - filled
     
@@ -74,6 +78,8 @@ def get_status_icon(led):
     """Get status icon and color"""
     if led == 1:
         return f"{Colors.YELLOW}🔋 CHARGING{Colors.END}"
+    elif led == 2:
+        return f"{Colors.RED}🚨 DANGER{Colors.END}"
     else:
         return f"{Colors.CYAN}⚒️  WORKING{Colors.END}"
 
@@ -83,206 +89,183 @@ def print_dashboard():
         helmets = dict(helmets_data)
         stations = dict(stations_data)
         current_alarm = dict(alarm_state)
+        logs = list(command_log)
     
     clear_screen()
     
     # === HEADER ===
-    print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*80}{Colors.END}")
-    print(f"{Colors.BOLD}{Colors.CYAN}🏗️  CONSTRUCTION SITE MONITORING DASHBOARD (ALL DATA){Colors.END}")
-    print(f"{Colors.BOLD}{Colors.CYAN}{'='*80}{Colors.END}\n")
+    print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*90}{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.CYAN}🏗️  PURE MQTT MONITORING DASHBOARD{Colors.END}")
+    print(f"{Colors.BOLD}{Colors.CYAN}{'='*90}{Colors.END}\n")
     
     # Connection Status
-    if mqtt_connected:
-        status = f"{Colors.GREEN}✅ CONNECTED{Colors.END}"
-    else:
-        status = f"{Colors.RED}❌ DISCONNECTED{Colors.END}"
+    status = f"{Colors.GREEN}✅ CONNECTED{Colors.END}" if mqtt_connected else f"{Colors.RED}❌ DISCONNECTED{Colors.END}"
+    print(f"📡 MQTT Status: {status}  |  📊 Total Messages: {Colors.BOLD}{message_count}{Colors.END}")
+    print(f"⏰ Local Time: {Colors.BOLD}{datetime.now().strftime('%H:%M:%S')}{Colors.END}")
+    print(f"{Colors.CYAN}{'─'*90}{Colors.END}\n")
     
-    print(f"📡 MQTT Status: {status}  |  📊 Messages: {Colors.BOLD}{message_count}{Colors.END}")
-    print(f"⏰ Last Update: {Colors.BOLD}{datetime.now().strftime('%H:%M:%S')}{Colors.END}")
-    print(f"{Colors.CYAN}{'─'*80}{Colors.END}\n")
+    # === DEVICES OVERVIEW (HELMETS & STATIONS) ===
+    col_width = 44
     
-    if not helmets and not stations:
-        print(f"{Colors.YELLOW}⏳ Waiting for device data...{Colors.END}\n")
-        return
+    # Split into two columns
+    print(f"{Colors.BOLD}{'⛑️  SMART HELMETS':<{col_width}} | {'🌩️  ENVIRONMENTAL STATIONS':<{col_width}}{Colors.END}")
+    print(f"{'─'*col_width}─┼─{'─'*col_width}")
+    
+    max_rows = max(len(helmets), len(stations))
+    h_ids = sorted(helmets.keys())
+    s_ids = sorted(stations.keys())
+    
+    for i in range(max(max_rows, 1)):
+        # Helmet Column
+        h_info = ""
+        if i < len(h_ids):
+            h_id = h_ids[i]
+            h = helmets[h_id]
+            batt = h.get('battery', 0)
+            led = h.get('led', 0)
+            h_info = f"{Colors.BOLD}{h_id}{Colors.END} {get_battery_bar(batt, 10)} {batt:3d}% {get_status_icon(led)}"
+        elif i == 0 and not h_ids:
+            h_info = f"{Colors.GRAY}Waiting for helmets...{Colors.END}"
+            
+        # Station Column
+        s_info = ""
+        if i < len(s_ids):
+            s_id = s_ids[i]
+            s = stations[s_id]
+            dust, noise, gas = s.get('dust', 0), s.get('noise', 0), s.get('gas', 0)
+            # Threshold markers
+            is_warn = (dust > 50 or noise > 80 or gas > 1.0)
+            warn_icon = "🔴" if is_warn else "🟢"
+            s_info = f"{Colors.BOLD}{s_id}{Colors.END} {warn_icon} D:{dust:4.1f} N:{noise:4.1f} G:{gas:4.2f}"
+        elif i == 0 and not s_ids:
+            s_info = f"{Colors.GRAY}Waiting for stations...{Colors.END}"
+            
+        print(f"{h_info:<{col_width + (10 if i < len(h_ids) else 0)}} | {s_info}")
+    
+    print(f"{Colors.CYAN}{'─'*90}{Colors.END}\n")
 
-    # === ALARM SECTION ===
-    print(f"{Colors.BOLD}🚨 ALARM SYSTEM{Colors.END}")
-    print(f"{'─'*80}")
-    
-    siren_status = f"{Colors.RED}📢 ON (SOUNDING){Colors.END}" if current_alarm['siren'] else f"{Colors.GREEN}🔕 OFF (SILENT){Colors.END}"
-    print(f"🔊 Siren Status: {siren_status}")
+    # === ALARM & DISPLAY SECTION ===
+    print(f"{Colors.BOLD}🚨 SYSTEM ALARM & DISPLAY{Colors.END}")
+    print(f"{'─'*90}")
+    siren = f"{Colors.RED}📢 ON (SOUNDING){Colors.END}" if current_alarm['siren'] else f"{Colors.GREEN}🔕 OFF (SILENT){Colors.END}"
+    print(f"🔊 Siren Status: {siren}")
     
     zones = current_alarm['zones']
     if zones:
-        zone_str = ", ".join(zones)
-        print(f"🖥️  Display Zones: {Colors.RED}{zone_str}{Colors.END}")
+        print(f"🖥️  Dangerous Zones on Display: {Colors.RED}{', '.join(zones[:10])}{' ...' if len(zones) > 10 else ''}{Colors.END}")
     else:
-        print(f"🖥️  Display Zones: {Colors.GREEN}None (Safe){Colors.END}")
-    print(f"{Colors.CYAN}{'─'*80}{Colors.END}\n")
+        print(f"🖥️  Dangerous Zones on Display: {Colors.GREEN}None (All areas safe){Colors.END}")
+    print(f"{Colors.CYAN}{'─'*90}{Colors.END}\n")
 
-
-    # === STATIONS SECTION ===
-    print(f"{Colors.BOLD}🌩️  ENVIRONMENTAL STATIONS{Colors.END}")
-    print(f"{'─'*80}")
+    # === COMMAND LOG (REAL-TIME COMMANDS FROM MANAGER) ===
+    print(f"{Colors.BOLD}📜 MANAGER COMMAND LOG (RECENT){Colors.END}")
+    print(f"{'─'*90}")
+    if not logs:
+        print(f"{Colors.GRAY}No commands recorded yet.{Colors.END}")
+    else:
+        for log in logs:
+            print(f"{Colors.GRAY}[{log['time']}]{Colors.END} {log['msg']}")
     
-    if not stations:
-         print(f"{Colors.YELLOW}No stations connected.{Colors.END}")
-    else:
-        # Header Row
-        print(f"{Colors.UNDERLINE}{'ID':<10} {'Dust':<10} {'Noise':<10} {'Gas':<10} {'Position':<25} {'Status'}{Colors.END}")
-        
-        for s_id, data in sorted(stations.items()):
-            dust = data['dust']
-            noise = data['noise']
-            gas = data['gas']
-            
-            # Simple threshold check for display color
-            d_col = Colors.RED if dust > 50 else Colors.GREEN
-            n_col = Colors.RED if noise > 80 else Colors.GREEN
-            g_col = Colors.RED if gas > 1.0 else Colors.GREEN
-            
-            pos_str = f"({data['lat']:.4f}, {data['lon']:.4f})"
-            warn_icon = "🔴" if (dust > 50 or noise > 80 or gas > 1.0) else "🟢"
-            
-            print(
-                f"{s_id:<10} "
-                f"{d_col}{dust:<10.2f}{Colors.END} "
-                f"{n_col}{noise:<10.2f}{Colors.END} "
-                f"{g_col}{gas:<10.2f}{Colors.END} "
-                f"{pos_str:<25} "
-                f"{warn_icon}"
-            )
-    print(f"{Colors.CYAN}{'─'*80}{Colors.END}\n")
-
-
-    # === HELMETS SECTION ===
-    print(f"{Colors.BOLD}⛑️  SMART HELMETS{Colors.END}")
-    print(f"{'─'*80}")
-    
-    if not helmets:
-        print(f"{Colors.YELLOW}No helmets connected.{Colors.END}")
-    else:
-        for helmet_id, data in sorted(helmets.items()):
-            battery = data['battery']
-            
-            # Battery color
-            if battery < 10:
-                batt_col = Colors.RED
-            elif battery < 30:
-                batt_col = Colors.YELLOW
-            else:
-                batt_col = Colors.GREEN
-            
-            icon = get_status_icon(data['led'])
-            pos_str = f"Lat {data['lat']:.5f}, Lon {data['lon']:.5f}"
-            
-            print(f"User {Colors.BOLD}{helmet_id}{Colors.END}: {icon}  |  Bat: {batt_col}{battery}%{Colors.END} {get_battery_bar(battery)}  |  Pos: {Colors.CYAN}{pos_str}{Colors.END}")
-
-    print(f"\n{Colors.CYAN}{'='*80}{Colors.END}")
-    print(f"{Colors.BOLD}Press Ctrl+C to exit{Colors.END}\n")
+    print(f"\n{Colors.CYAN}{'='*90}{Colors.END}")
+    print(f"Press {Colors.BOLD}Ctrl+C{Colors.END} to exit")
 
 # MQTT Callbacks
 def on_connect(client, userdata, flags, rc):
     global mqtt_connected
     if rc == 0:
         mqtt_connected = True
-        
-        # Subscribe to everything
+        # Subscribe to all 4 main topic patterns
         topics = [
-            (f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/#", 0),
-            (f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/#", 0),
-            (f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/#", 0)
+            (f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/+/telemetry", 0),
+            (f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/+/telemetry", 0),
+            (f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_HELMET}/+/command", 0),
+            (f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_ALARM}/+/command", 0)
         ]
         client.subscribe(topics)
     else:
         mqtt_connected = False
 
 def on_message(client, userdata, message):
-    global helmets_data, stations_data, alarm_state, message_count
+    global helmets_data, stations_data, alarm_state, message_count, command_log
     
     try:
         topic = message.topic
         payload = json.loads(message.payload.decode("utf-8"))
-        message_count += 1
+        curr_time = datetime.now().strftime("%H:%M:%S")
         
         with data_lock:
+            message_count += 1
+            
             # HELMET TELEMETRY
-            if f"/{TOPIC_HELMET}/" in topic and "telemetry" in topic:
-                h_id = payload.get('id')
-                if h_id:
-                    helmets_data[h_id] = {
-                        'id': h_id,
-                        'lat': payload.get('latitude'),
-                        'lon': payload.get('longitude'),
-                        'battery': payload.get('battery'),
-                        'led': payload.get('led'),
-                        'time': datetime.now().strftime("%H:%M:%S")
-                    }
+            if f"/{TOPIC_HELMET}/" in topic and topic.endswith("/telemetry"):
+                h_id = str(payload.get('id', '???'))
+                helmets_data[h_id] = {
+                    'battery': payload.get('battery', 0),
+                    'led': payload.get('led', 0),
+                    'lat': payload.get('latitude', 0),
+                    'lon': payload.get('longitude', 0)
+                }
 
             # STATION TELEMETRY
-            elif f"/{TOPIC_STATION}/" in topic and "telemetry" in topic:
-                s_id = payload.get('id')
-                if s_id:
-                    stations_data[s_id] = {
-                        'id': s_id,
-                        'lat': payload.get('latitude'),
-                        'lon': payload.get('longitude'),
-                        'dust': float(payload.get('dust', 0)),
-                        'noise': float(payload.get('noise', 0)),
-                        'gas': float(payload.get('gas', 0)),
-                        'time': datetime.now().strftime("%H:%M:%S")
-                    }
+            elif f"/{TOPIC_STATION}/" in topic and topic.endswith("/telemetry"):
+                s_id = str(payload.get('id', '???'))
+                stations_data[s_id] = {
+                    'dust': payload.get('dust', 0),
+                    'noise': payload.get('noise', 0),
+                    'gas': payload.get('gas', 0)
+                }
 
-            # ALARM COMMANDS (Infer state from Manager commands)
-            elif f"/{TOPIC_ALARM}/" in topic and "command" in topic:
+            # HELMET COMMANDS (From Manager)
+            elif f"/{TOPIC_MANAGER}/{TOPIC_HELMET}/" in topic:
+                h_id = topic.split('/')[-2]
                 cmd = payload.get('command')
+                val = payload.get('led')
+                msg = f"{Colors.YELLOW}HELMET {h_id}{Colors.END} -> {Colors.BOLD}{cmd}{Colors.END} (led={val})"
+                command_log.append({'time': curr_time, 'msg': msg})
+
+            # ALARM COMMANDS (From Manager)
+            elif f"/{TOPIC_MANAGER}/{TOPIC_ALARM}/" in topic:
+                a_id = topic.split('/')[-2]
+                cmd = payload.get('command')
+                
                 if cmd == 'turn_siren_on':
                     alarm_state['siren'] = True
+                    msg = f"{Colors.RED}ALARM {a_id}{Colors.END} -> {Colors.BOLD}SIREN ON{Colors.END}"
                 elif cmd == 'turn_siren_off':
                     alarm_state['siren'] = False
+                    msg = f"{Colors.GREEN}ALARM {a_id}{Colors.END} -> {Colors.BOLD}SIREN OFF{Colors.END}"
                 elif cmd == 'update_display':
-                    alarm_state['zones'] = payload.get('zones', [])
+                    zones = payload.get('zones', [])
+                    alarm_state['zones'] = zones
+                    msg = f"{Colors.BLUE}ALARM {a_id}{Colors.END} -> {Colors.BOLD}ZONES UPDATED{Colors.END} ({len(zones)} zones)"
+                else:
+                    msg = f"ALARM {a_id} -> {cmd}"
+                
+                command_log.append({'time': curr_time, 'msg': msg})
             
     except Exception as e:
+        # Silently fail on malformed JSON or other errors
         pass
 
-def start_mqtt():
-    """Start MQTT client"""
-    # Unique ID for dashboard
-    import uuid
-    client_id = f"dashboard-terminal-{MQTT_USERNAME}-{uuid.uuid4().hex[:6]}"
-    
-    mqtt_client = mqtt.Client(client_id)
-    mqtt_client.on_connect = on_connect
-    mqtt_client.on_message = on_message
-    mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
-    
-    try:
-        mqtt_client.connect(BROKER_ADDRESS, BROKER_PORT, 60)
-        mqtt_client.loop_start()
-        return mqtt_client
-    except Exception as e:
-        print(f"❌ Connection error: {e}")
-        return None
-
 def main():
-    """Main dashboard loop"""
-    # Start MQTT
-    mqtt_client = start_mqtt()
+    import uuid
+    client_id = f"dashboard-terminal-{uuid.uuid4().hex[:6]}"
+    client = mqtt.Client(client_id)
+    client.on_connect = on_connect
+    client.on_message = on_message
+    client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
     
-    if not mqtt_client:
-        return
-    
-    time.sleep(1) # Wait for connect
-    
-    # Main loop - refresh every second
     try:
+        client.connect(BROKER_ADDRESS, BROKER_PORT, 60)
+        client.loop_start()
+        
         while True:
             print_dashboard()
             time.sleep(1)
+            
     except KeyboardInterrupt:
-        mqtt_client.loop_stop()
-        mqtt_client.disconnect()
+        client.loop_stop()
+        client.disconnect()
         print(f"\n{Colors.GREEN}✅ Dashboard stopped{Colors.END}\n")
 
 if __name__ == "__main__":

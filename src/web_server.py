@@ -35,7 +35,7 @@ def get_data():
     # Load sectors
     if map_csv.exists():
         try:
-            df_grid = pd.read_csv(map_csv)
+            df_grid = pd.read_csv(map_csv, dtype={'id': str})
             for _, row in df_grid.iterrows():
                 data["sectors"].append({
                     "id": row["id"],
@@ -48,7 +48,7 @@ def get_data():
     # Load helmets
     if helmets_csv.exists():
         try:
-            df_helmets = pd.read_csv(helmets_csv)
+            df_helmets = pd.read_csv(helmets_csv, dtype={'id': str})
             for _, row in df_helmets.iterrows():
                 # Use .get() but with a default and better type conversion
                 lat = row.get("latitude")
@@ -71,7 +71,7 @@ def get_data():
     stations_csv = DATA_DIR / "stations.csv"
     if stations_csv.exists():
         try:
-            df_stations = pd.read_csv(stations_csv)
+            df_stations = pd.read_csv(stations_csv, dtype={'id': str})
             for _, row in df_stations.iterrows():
                 lat = row["latitude"]
                 lon = row["longitude"]
