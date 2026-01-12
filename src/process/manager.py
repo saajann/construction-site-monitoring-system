@@ -434,13 +434,14 @@ class DataCollectorManager:
         try:
             with open(filepath, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(["id", "latitude", "longitude", "battery", "is_dangerous"])
+                writer.writerow(["id", "latitude", "longitude", "battery", "led", "is_dangerous"])
                 for helmet_id, state in self.helmet_states.items():
                     lat = state.get("latitude", 0)
                     lon = state.get("longitude", 0)
                     battery = state.get("battery", 0)
+                    led = state.get("led", 0)
                     is_dangerous = 1 if helmet_id in self.workers_in_danger else 0
-                    writer.writerow([helmet_id, lat, lon, battery, is_dangerous])
+                    writer.writerow([helmet_id, lat, lon, battery, led, is_dangerous])
             # print(f"    [MGR] 💾 Saved helmets.csv")
         except Exception as e:
             print(f"❌ Failed to save helmets.csv: {e}")
@@ -459,7 +460,8 @@ class DataCollectorManager:
                         self.helmet_states[h_id] = {
                             'latitude': float(row.get('latitude', 0)),
                             'longitude': float(row.get('longitude', 0)),
-                            'battery': int(float(row.get('battery', 0)))
+                            'battery': int(float(row.get('battery', 0))),
+                            'led': int(float(row.get('led', 0)))
                         }
         except Exception as e:
             print(f"⚠️ Error loading helmets.csv: {e}")

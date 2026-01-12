@@ -13,7 +13,7 @@ class WorkerSmartHelmet:
         self.id = id
         self.position = position
         self.battery = 100
-        self.led = 0 # if 0 then LED is green, if 1 then LED is yellow and needs to be recharged
+        self.led = 0  # 0: Green (Work/Moving), 1: Yellow (Charging/Stationary), 2: Red (Danger)
         self.boundaries = boundaries # expectation: {"min_lat": ..., "max_lat": ..., "min_lon": ..., "max_lon": ...}
         # forse è meglio cambiare la logica del led, conviene fare:
         # 0, green, tutto ok
@@ -38,6 +38,10 @@ class WorkerSmartHelmet:
             #self.led = 0
 
     def move(self):
+        # Movement is allowed only if the LED is green (Work mode)
+        if self.led != 0:
+            return
+
         # Realistic random walk: small steps (~1-2 meters)
         # 1 deg lat ~ 111km -> 1m ~ 0.000009 deg
         step_size = 0.00002 # approx 2 meters

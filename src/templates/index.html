@@ -109,7 +109,15 @@
         <div class="legend-item">
             <div class="box" style="background: rgba(255,0,0,0.4); border: 1px solid red;"></div> Danger Zone
         </div>
-        <div class="legend-item">👷 Helmet</div>
+        <div class="legend-item">
+            <div class="box" style="background: #7FFF00; border: 1px solid #45a049;"></div> 👷 Work (Green)
+        </div>
+        <div class="legend-item">
+            <div class="box" style="background: yellow; border: 1px solid #d4af37;"></div> 👷 Charging (Yellow)
+        </div>
+        <div class="legend-item">
+            <div class="box" style="background: red; border: 1px solid #8b0000;"></div> 👷 Danger (Red)
+        </div>
         <div class="legend-item">📡 Station</div>
     </div>
 
@@ -183,6 +191,15 @@
 
                 // 2. Add Helmet Traces
                 data.helmets.forEach(h => {
+                    let markerColor = "#7FFF00"; // Default Green (LED 0)
+
+                    if (h.led === 1) {
+                        markerColor = "yellow";
+                    }
+                    if (h.is_dangerous === true) {
+                        markerColor = "red";
+                    }
+
                     traces.push({
                         type: "scattermapbox",
                         mode: "markers+text",
@@ -190,7 +207,7 @@
                         lon: [h.longitude],
                         marker: {
                             size: 14,
-                            color: h.is_dangerous ? "red" : "#7FFF00",
+                            color: markerColor,
                             opacity: 1
                         },
                         text: [`👷 ${h.id}`],

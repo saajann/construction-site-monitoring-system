@@ -43,18 +43,19 @@ def get_data():
         try:
             df_helmets = pd.read_csv(helmets_csv)
             for _, row in df_helmets.iterrows():
-                # Handle NaNs manually for safety
-                lat = row["latitude"]
-                lon = row["longitude"]
+                # Use .get() but with a default and better type conversion
+                lat = row.get("latitude")
+                lon = row.get("longitude")
                 if pd.isna(lat) or pd.isna(lon):
                     continue
                     
                 data["helmets"].append({
-                    "id": row["id"],
+                    "id": str(row["id"]),
                     "latitude": float(lat),
                     "longitude": float(lon),
-                    "battery": int(row.get("battery", 0)) if not pd.isna(row.get("battery")) else 0,
-                    "is_dangerous": int(row.get("is_dangerous", 0)) == 1
+                    "battery": int(row["battery"]) if not pd.isna(row.get("battery")) else 0,
+                    "led": int(row["led"]) if not pd.isna(row.get("led")) else 0,
+                    "is_dangerous": bool(row.get("is_dangerous", 0) == 1)
                 })
         except Exception as e:
             print(f"Error reading helmets.csv: {e}")
