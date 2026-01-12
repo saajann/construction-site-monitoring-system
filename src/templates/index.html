@@ -338,8 +338,9 @@
 
                 // 3. Add Station Traces (Circles for range + Markers)
                 if (data.stations) {
+                    const stationRange = data.station_range || 10; // Use from API or default to 10
                     data.stations.forEach(s => {
-                        const circle = generateCircle(s.latitude, s.longitude, 10);
+                        const circle = generateCircle(s.latitude, s.longitude, stationRange);
                         const color = s.is_dangerous ? "rgba(255,0,0,0.4)" : "rgba(46,204,113,0.3)";
                         const stroke = s.is_dangerous ? "red" : "#2ecc71";
 

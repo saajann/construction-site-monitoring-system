@@ -3,6 +3,11 @@ import json
 import pandas as pd
 from flask import Flask, render_template, jsonify
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
+MONITORING_STATION_RANGE = int(os.getenv("MONITORING_STATION_RANGE", 50))
 
 app = Flask(__name__)
 
@@ -22,7 +27,9 @@ def get_data():
     
     data = {
         "sectors": [],
-        "helmets": []
+        "helmets": [],
+        "stations": [],
+        "station_range": MONITORING_STATION_RANGE
     }
     
     # Load sectors
