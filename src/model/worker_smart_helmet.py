@@ -9,15 +9,16 @@ from model.gps import GPS
 
 class WorkerSmartHelmet:
 
-    def __init__(self, id: str, position: GPS):
+    def __init__(self, id: str, position: GPS, boundaries: dict = None):
         self.id = id
         self.position = position
         self.battery = 100
         self.led = 0 # if 0 then LED is green, if 1 then LED is yellow and needs to be recharged
+        self.boundaries = boundaries # expectation: {"min_lat": ..., "max_lat": ..., "min_lon": ..., "max_lon": ...}
         # forse è meglio cambiare la logica del led, conviene fare:
-            # 0, green, tutto ok
-            # 1, giallo, batteria sotto il 10% 
-            # 2, rosso, è entrato in una zona pericolosa
+        # 0, green, tutto ok
+        # 1, giallo, batteria sotto il 10% 
+        # 2, rosso, è entrato in una zona pericolosa
     
     def check_if_dangerous(self):
         ...
@@ -45,8 +46,16 @@ class WorkerSmartHelmet:
         d_lat = random.uniform(-step_size, step_size)
         d_lon = random.uniform(-step_size, step_size)
         
-        self.position.update_latitude(self.position.latitude + d_lat)
-        self.position.update_longitude(self.position.longitude + d_lon)
+        new_lat = self.position.latitude + d_lat
+        new_lon = self.position.longitude + d_lon
+
+        # Boundary control: keep the helmet inside the site area
+        if self.boundaries:
+            new_lat = max(self.boundaries["min_lat"], min(new_lat, self.boundaries["max_lat"]))
+            new_lon = max(self.boundaries["min_lon"], min(new_lon, self.boundaries["max_lon"]))
+
+        self.position.update_latitude(new_lat)
+        self.position.update_longitude(new_lon)
     
     def info(self):
         # return json of info

@@ -33,6 +33,25 @@ TOPIC_HELMET = os.getenv("TOPIC_HELMET")
 TOPIC_MANAGER = os.getenv("TOPIC_MANAGER")
 
 CSV_PATH = ROOT / "data" / "helmets.csv"
+SITE_CSV_PATH = ROOT / "data" / "site.csv"
+
+
+def load_site_boundaries(csv_path):
+    """Load site boundaries from CSV and return min/max lat/lon"""
+    lats = []
+    lons = []
+    with open(csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            lats.append(float(row["latitude"]))
+            lons.append(float(row["longitude"]))
+    
+    return {
+        "min_lat": min(lats),
+        "max_lat": max(lats),
+        "min_lon": min(lons),
+        "max_lon": max(lons)
+    }
 
 
 def on_connect(client, userdata, flags, rc):
@@ -90,7 +109,7 @@ def on_message(client, userdata, message):
         print(f"❌ Error processing command: {e}")
 
 
-def start_helmet_device(helmet_id, latitude, longitude):
+def start_helmet_device(helmet_id, latitude, longitude, boundaries):
     """
     Start a helmet device that:
     1. Publishes telemetry
@@ -103,7 +122,7 @@ def start_helmet_device(helmet_id, latitude, longitude):
     
     # Create helmet instance
     position = GPS(latitude, longitude)
-    helmet = WorkerSmartHelmet(helmet_id, position)
+    helmet = WorkerSmartHelmet(helmet_id, position, boundaries)
     
     # Set user data (shared between callbacks)
     mqtt_client.user_data_set({
@@ -180,12 +199,13 @@ def main():
     print("="*60 + "\n")
     
     helmets = load_helmets(CSV_PATH)
+    boundaries = load_site_boundaries(SITE_CSV_PATH)
     threads = []
     
     for helmet in helmets:
         t = threading.Thread(
             target=start_helmet_device,
-            args=helmet,
+            args=(*helmet, boundaries),
             daemon=True
         )
         t.start()
