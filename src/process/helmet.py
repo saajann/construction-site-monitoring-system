@@ -138,16 +138,8 @@ def start_helmet_device(helmet_id, latitude, longitude, boundaries):
     # Start loop (non-blocking)
     mqtt_client.loop_start()
     
-    # Topics
-    info_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}/info"
-    telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}/telemetry"
-    
-    # 1. Publish static info ONCE with retain=True
-    info_payload = helmet.static_info()
-    mqtt_client.publish(info_topic, info_payload, qos=1, retain=True)
-    print(f"[HLM-{helmet_id}] ℹ️  INFO Published: {info_topic}")
-    
     # Telemetry publishing loop
+    telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}/telemetry"
     
     # for message_id in range(MESSAGE_LIMIT):
     while True:
@@ -163,8 +155,8 @@ def start_helmet_device(helmet_id, latitude, longitude, boundaries):
             # CHARGING MODE
             helmet.recharge_battery(random.randint(5, 10))  # Faster charge
         
-        # Publish telemetry (SenML)
-        payload = helmet.senml_telemetry()
+        # Publish telemetry
+        payload = helmet.info()
         mqtt_client.publish(telemetry_topic, payload, 0, False)
         
         # Clean Logic

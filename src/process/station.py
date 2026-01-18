@@ -54,16 +54,8 @@ def start_station_device(station_id, latitude, longitude):
     position = GPS(latitude, longitude)
     station = EnvironmentalMonitoringStation(station_id, position)
     
-    # Topics
-    info_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/{station_id}/info"
-    telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/{station_id}/telemetry"
-    
-    # 1. Publish static info ONCE with retain=True
-    info_payload = station.static_info()
-    mqtt_client.publish(info_topic, info_payload, qos=1, retain=True)
-    print(f"[STA-{station_id}] ℹ️  INFO Published: {info_topic}")
-
     # Loop telemetry
+    telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/{station_id}/telemetry"
     
     # for message_id in range(MESSAGE_LIMIT):
     while True:
@@ -72,7 +64,7 @@ def start_station_device(station_id, latitude, longitude):
         station.update_noise_level()
         station.update_gas_level()
         
-        payload = station.senml_telemetry()
+        payload = station.info()
         mqtt_client.publish(telemetry_topic, payload, 0, False)
         
         log_msg = (

@@ -111,43 +111,20 @@ class DataCollectorManager:
         self.update_stations_csv() # Initial save with header
         self.update_alarm_status_csv() # Initial save with header
     
-    def _parse_senml(self, payload):
-        """Helper to parse SenML list into a flat dictionary"""
-        result = {}
-        if isinstance(payload, list):
-            for record in payload:
-                # Base Name
-                if 'bn' in record:
-                    # extract ID if possible
-                    # record['bn'] is e.g. "helmet:001" or "station:001"
-                    if ':' in record['bn']:
-                        result['id'] = record['bn'].split(':')[-1]
-                
-                # Name and Value
-                if 'n' in record:
-                    name = record['n']
-                    # Support v (number), vs (string), vb (bool), vd (data)
-                    value = record.get('v')
-                    if value is None: value = record.get('vs')
-                    if value is None: value = record.get('vb')
-                    if value is None: value = record.get('vd')
-                    result[name] = value
-        return result
-    
     def on_connect(self, client, userdata, flags, rc):
         """Callback when connected to MQTT broker"""
         print(f"Manager connected with result code {rc}")
         
         if rc == 0:
-            # Subscribe to all helmet info and telemetry
-            client.subscribe(f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/+/info", qos=1)
-            client.subscribe(f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/+/telemetry", qos=0)
-            print(f"✅ Subscribed to Helmet Info & Telemetry")
+            # Subscribe to all helmet telemetry
+            helmet_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/#"
+            client.subscribe(helmet_topic, qos=0)
+            print(f"✅ Subscribed to: {helmet_topic}")
 
-            # Subscribe to all station info and telemetry
-            client.subscribe(f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/+/info", qos=1)
-            client.subscribe(f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/+/telemetry", qos=0)
-            print(f"✅ Subscribed to Station Info & Telemetry")
+            # Subscribe to all station telemetry
+            station_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/#"
+            client.subscribe(station_topic, qos=0)
+            print(f"✅ Subscribed to: {station_topic}")
         else:
             print(f"❌ Connection failed with code {rc}")
     
@@ -161,15 +138,12 @@ class DataCollectorManager:
             # if random.random() < 0.1: # Sample logs
             #     print(f"📨 Received: {topic}")
             
-            # Parse SenML Payload
-            parsed_data = self._parse_senml(payload)
-            
             # Route message based on topic
             if f"/{TOPIC_HELMET}/" in topic:
-                self._handle_helmet_message(topic, parsed_data)
+                self._handle_helmet_message(topic, payload)
                 self.update_helmets_csv()
             elif f"/{TOPIC_STATION}/" in topic:
-                self._handle_station_message(topic, parsed_data)
+                self._handle_station_message(topic, payload)
                 self.update_stations_csv()
             
         except json.JSONDecodeError as e:
@@ -210,25 +184,26 @@ class DataCollectorManager:
         if station_id not in self.station_states:
             self.station_states[station_id] = {}
         
-        for key in ['latitude', 'longitude', 'dust', 'noise', 'gas', 'is_dangerous']:
-            if key in payload and payload[key] is not None:
-                self.station_states[station_id][key] = payload[key]
+        self.station_states[station_id].update({
+            'latitude': lat,
+            'longitude': lon,
+            'dust': dust,
+            'noise': noise,
+            'gas': gas,
+            'is_dangerous': is_dangerous
+        })
         
         self._update_station_danger_zone(station_id, lat, lon, is_dangerous)
 
-        # Only print telemetry log if we have actual sensor data
-        if any(k in payload for k in ['dust', 'noise', 'gas']):
-            status_icon = "🟢" if not is_dangerous else "🔴"
-            print(
-                f"[MGR] 📥 RECV Station {station_id} | "
-                f"{status_icon} Status | "
-                f"Dust: {dust if dust is not None else 0:5.1f}, "
-                f"Noise: {noise if noise is not None else 0:5.1f}, "
-                f"Gas: {gas if gas is not None else 0:4.2f}"
-            )
+        status_icon = "🟢" if not is_dangerous else "🔴"
+        print(
+            f"[MGR] 📥 RECV Station {station_id} | "
+            f"{status_icon} Status | "
+            f"Dust: {dust:5.1f}, Noise: {noise:5.1f}, Gas: {gas:4.2f}"
+        )
 
-            if is_dangerous:
-                 print(f"    ⚠️  DANGER DETAIL: {', '.join(danger_reasons)}")
+        if is_dangerous:
+             print(f"    ⚠️  DANGER DETAIL: {', '.join(danger_reasons)}")
 
     def _update_station_danger_zone(self, station_id, lat, lon, is_dangerous):
         """
@@ -320,22 +295,23 @@ class DataCollectorManager:
         if helmet_id not in self.helmet_states:
             self.helmet_states[helmet_id] = {}
         
-        for key in ['battery', 'led', 'latitude', 'longitude']:
-            if key in payload and payload[key] is not None:
-                self.helmet_states[helmet_id][key] = payload[key]
+        self.helmet_states[helmet_id].update({
+            'battery': battery,
+            'led': led_status,
+            'latitude': lat,
+            'longitude': lon
+        })
         
         # Apply business logic
         self._check_helmet_battery(helmet_id, battery, led_status)
         self._check_worker_safety(helmet_id, lat, lon)
 
-        # Only print telemetry log if we have battery/pos data
-        if any(k in payload for k in ['battery', 'latitude', 'longitude']):
-            print(
-                f"[MGR] 📥 RECV Helmet  {helmet_id} | "
-                f"Bat: {battery if battery is not None else 0:3d}% | "
-                f"LED: {led_status} | "
-                f"Pos: ({lat if lat is not None else 0:.5f}, {lon if lon is not None else 0:.5f})"
-            )
+        print(
+            f"[MGR] 📥 RECV Helmet  {helmet_id} | "
+            f"Bat: {battery:3d}% | "
+            f"LED: {led_status} | "
+            f"Pos: ({lat:.5f}, {lon:.5f})"
+        )
 
     def _check_worker_safety(self, helmet_id, lat, lon):
         """
