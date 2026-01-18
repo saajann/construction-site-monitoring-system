@@ -64,8 +64,8 @@ class DataCollectorManager:
         self.helmet_states = {}  # {helmet_id: {'battery': int, 'led': int, 'position': tuple}}
         self.station_states = {} # {station_id: {...}}
         
-        # Load Site Vertices from CSV
-        site_csv_path = ROOT / "data" / "site.csv"
+        # Load Site Vertices from Static CSV
+        site_csv_path = ROOT / "data" / "static" / "site.csv"
         vertices = []
         try:
             with open(site_csv_path, newline="") as f:
@@ -415,7 +415,7 @@ class DataCollectorManager:
         status: 0 = SAFE, 1 = DANGEROUS
         """
         import csv
-        filepath = ROOT / "data" / "map.csv"
+        filepath = ROOT / "data" / "dynamic" / "map.csv"
         try:
             with open(filepath, 'w', newline='') as f:
                 writer = csv.writer(f)
@@ -434,7 +434,7 @@ class DataCollectorManager:
         Format: id, latitude, longitude, battery, is_dangerous
         """
         import csv
-        filepath = ROOT / "data" / "helmets.csv"
+        filepath = ROOT / "data" / "dynamic" / "helmets.csv"
         try:
             with open(filepath, 'w', newline='') as f:
                 writer = csv.writer(f)
@@ -450,8 +450,8 @@ class DataCollectorManager:
             print(f"❌ Failed to save helmets.csv: {e}")
 
     def _load_helmets_from_csv(self):
-        """Loads initial helmet data from CSV to avoid wiping config"""
-        filepath = ROOT / "data" / "helmets.csv"
+        """Loads initial helmet data from STATIC CSV to avoid wiping config"""
+        filepath = ROOT / "data" / "static" / "helmets.csv"
         if not filepath.exists():
             return
         try:
@@ -475,7 +475,7 @@ class DataCollectorManager:
         Format: id, latitude, longitude, is_dangerous
         """
         import csv
-        filepath = ROOT / "data" / "stations.csv"
+        filepath = ROOT / "data" / "dynamic" / "stations.csv"
         try:
             with open(filepath, 'w', newline='') as f:
                 writer = csv.writer(f)
@@ -492,8 +492,8 @@ class DataCollectorManager:
             print(f"❌ Failed to save stations.csv: {e}")
 
     def _load_stations_from_csv(self):
-        """Loads initial station data from CSV to avoid wiping config"""
-        filepath = ROOT / "data" / "stations.csv"
+        """Loads initial station data from STATIC CSV to avoid wiping config"""
+        filepath = ROOT / "data" / "static" / "stations.csv"
         if not filepath.exists():
             return
         try:
@@ -516,7 +516,7 @@ class DataCollectorManager:
         Format: alarm_active
         """
         import csv
-        filepath = ROOT / "data" / "alarm_status.csv"
+        filepath = ROOT / "data" / "dynamic" / "alarm_status.csv"
         try:
             with open(filepath, 'w', newline='') as f:
                 writer = csv.writer(f)

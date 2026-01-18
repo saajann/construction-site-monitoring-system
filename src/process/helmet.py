@@ -32,8 +32,8 @@ TIME_BETWEEN_MESSAGE = int(os.getenv("TIME_BETWEEN_MESSAGE"))
 TOPIC_HELMET = os.getenv("TOPIC_HELMET")
 TOPIC_MANAGER = os.getenv("TOPIC_MANAGER")
 
-CSV_PATH = ROOT / "data" / "helmets.csv"
-SITE_CSV_PATH = ROOT / "data" / "site.csv"
+CSV_PATH = ROOT / "data" / "static" / "helmets.csv"
+SITE_CSV_PATH = ROOT / "data" / "static" / "site.csv"
 
 
 def load_site_boundaries(csv_path):

@@ -30,7 +30,7 @@ MESSAGE_LIMIT = int(os.getenv("MESSAGE_LIMIT"))
 TIME_BETWEEN_MESSAGE = int(os.getenv("TIME_BETWEEN_MESSAGE"))
 TOPIC_STATION = os.getenv("TOPIC_STATION")
 
-CSV_PATH = ROOT / "data" / "stations.csv"
+CSV_PATH = ROOT / "data" / "static" / "stations.csv"
 
 
 def on_connect(client, userdata, flags, rc):
