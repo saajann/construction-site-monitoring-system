@@ -6,6 +6,7 @@
 
 import json
 import random
+import time
 from model.gps import GPS
 
 from dotenv import load_dotenv
@@ -52,17 +53,27 @@ class EnvironmentalMonitoringStation:
         self.position.update_latitude(self.position.latitude + d_lat)
         self.position.update_longitude(self.position.longitude + d_lon)
     
-    def info(self):
-        # return json of info
-        data = {
-            "id": self.id,
-            "latitude": self.position.latitude,
-            "longitude": self.position.longitude,
-            "altitude": self.position.altitude,
-            "range": self.range,
-            "dust": self.dust,
-            "noise": self.noise,
-            "gas": self.gas
-        }
+    def senml_telemetry(self):
+        """Returns telemetry in SenML+JSON format"""
+        base_name = f"station:{self.id}"
+        timestamp = time.time()
+        
+        data = [
+            {"bn": base_name, "t": timestamp, "n": "dust", "u": "ug/m3", "v": self.dust},
+            {"n": "noise", "u": "dB", "v": self.noise},
+            {"n": "gas", "u": "ppm", "v": self.gas},
+            {"n": "latitude", "u": "lat", "v": self.position.latitude},
+            {"n": "longitude", "u": "lon", "v": self.position.longitude}
+        ]
+        return json.dumps(data)
 
+    def static_info(self):
+        """Returns static device information in SenML+JSON format"""
+        base_name = f"station:{self.id}"
+        data = [
+            {"bn": base_name, "n": "type", "vs": "monitoring_station"},
+            {"n": "manufacturer", "vs": "UniMoRe IoT Lab"},
+            {"n": "version", "vs": "1.0.0"},
+            {"n": "range", "u": "m", "v": self.range}
+        ]
         return json.dumps(data)

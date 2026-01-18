@@ -58,6 +58,20 @@ def clear_screen():
     """Clear terminal screen"""
     os.system('clear' if os.name != 'nt' else 'cls')
 
+def parse_senml(payload):
+    """Helper to parse SenML list into a flat dictionary"""
+    result = {}
+    if isinstance(payload, list):
+        for record in payload:
+            if 'bn' in record and ':' in record['bn']:
+                result['id'] = record['bn'].split(':')[-1]
+            if 'n' in record:
+                name = record['n']
+                value = record.get('v')
+                if value is None: value = record.get('vs')
+                result[name] = value
+    return result
+
 def get_battery_bar(battery, width=15):
     """Generate a visual battery bar"""
     battery = max(0, min(100, battery))
@@ -175,9 +189,12 @@ def on_connect(client, userdata, flags, rc):
     if rc == 0:
         mqtt_connected = True
         # Subscribe to all 4 main topic patterns
+        # Subscribe to all telemetry and info topics
         topics = [
             (f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/+/telemetry", 0),
+            (f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/+/info", 0),
             (f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/+/telemetry", 0),
+            (f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/+/info", 0),
             (f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_HELMET}/+/command", 0),
             (f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_ALARM}/+/command", 0)
         ]
@@ -196,24 +213,26 @@ def on_message(client, userdata, message):
         with data_lock:
             message_count += 1
             
-            # HELMET TELEMETRY
-            if f"/{TOPIC_HELMET}/" in topic and topic.endswith("/telemetry"):
-                h_id = str(payload.get('id', '???'))
-                helmets_data[h_id] = {
-                    'battery': payload.get('battery', 0),
-                    'led': payload.get('led', 0),
-                    'lat': payload.get('latitude', 0),
-                    'lon': payload.get('longitude', 0)
-                }
+            # HELMET TELEMETRY or INFO
+            if f"/{TOPIC_HELMET}/" in topic and (topic.endswith("/telemetry") or topic.endswith("/info")):
+                data = parse_senml(payload)
+                h_id = str(data.get('id', '???'))
+                if h_id not in helmets_data: helmets_data[h_id] = {}
+                
+                # Update only fields that are present
+                for key, data_key in [('battery', 'battery'), ('led', 'led'), ('lat', 'latitude'), ('lon', 'longitude')]:
+                    if data_key in data:
+                        helmets_data[h_id][key] = data[data_key]
 
-            # STATION TELEMETRY
-            elif f"/{TOPIC_STATION}/" in topic and topic.endswith("/telemetry"):
-                s_id = str(payload.get('id', '???'))
-                stations_data[s_id] = {
-                    'dust': payload.get('dust', 0),
-                    'noise': payload.get('noise', 0),
-                    'gas': payload.get('gas', 0)
-                }
+            # STATION TELEMETRY or INFO
+            elif f"/{TOPIC_STATION}/" in topic and (topic.endswith("/telemetry") or topic.endswith("/info")):
+                data = parse_senml(payload)
+                s_id = str(data.get('id', '???'))
+                if s_id not in stations_data: stations_data[s_id] = {}
+                
+                for key in ['dust', 'noise', 'gas', 'latitude', 'longitude']:
+                    if key in data:
+                        stations_data[s_id][key] = data[key]
 
             # HELMET COMMANDS (From Manager)
             elif f"/{TOPIC_MANAGER}/{TOPIC_HELMET}/" in topic:

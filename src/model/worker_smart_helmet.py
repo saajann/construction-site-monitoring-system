@@ -5,6 +5,7 @@
 
 import json
 import random
+import time
 from model.gps import GPS
 
 class WorkerSmartHelmet:
@@ -85,15 +86,25 @@ class WorkerSmartHelmet:
         
         return inside
     
-    def info(self):
-        # return json of info
-        data = {
-            "id": self.id,
-            "latitude": self.position.latitude,
-            "longitude": self.position.longitude,
-            "altitude": self.position.altitude,
-            "battery": self.battery,
-            "led": self.led
-        }
+    def senml_telemetry(self):
+        """Returns telemetry in SenML+JSON format"""
+        base_name = f"helmet:{self.id}"
+        timestamp = time.time()
+        
+        data = [
+            {"bn": base_name, "t": timestamp, "n": "battery", "u": "%", "v": self.battery},
+            {"n": "latitude", "u": "lat", "v": self.position.latitude},
+            {"n": "longitude", "u": "lon", "v": self.position.longitude},
+            {"n": "led", "v": self.led}
+        ]
+        return json.dumps(data)
 
+    def static_info(self):
+        """Returns static device information in SenML+JSON format"""
+        base_name = f"helmet:{self.id}"
+        data = [
+            {"bn": base_name, "n": "type", "vs": "smart_helmet"},
+            {"n": "manufacturer", "vs": "UniMoRe IoT Lab"},
+            {"n": "version", "vs": "1.0.0"}
+        ]
         return json.dumps(data)
