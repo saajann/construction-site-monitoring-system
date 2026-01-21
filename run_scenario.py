@@ -9,13 +9,14 @@ def run_project():
     # Get the project root directory
     root_dir = Path(__file__).resolve().parent
     
+    python_cmd = sys.executable
     # Define scripts to run relative to root
     scripts = [
-        ["python3", "src/process/manager.py"],
-        ["python3", "src/process/alarm.py"],
-        ["python3", "src/process/helmet.py"],
-        ["python3", "src/process/station.py"],
-        ["python3", "src/web_server.py"]
+        [python_cmd, "src/process/manager.py"],
+        [python_cmd, "src/process/alarm.py"],
+        [python_cmd, "src/process/helmet.py"],
+        [python_cmd, "src/process/station.py"],
+        [python_cmd, "src/web_server.py"]
     ]
     
     processes = []

@@ -52,12 +52,19 @@ def load_site_boundaries(csv_path):
 def on_connect(client, userdata, flags, rc):
     """Callback when helmet connects to broker"""
     helmet_id = userdata['helmet_id']
+    helmet = userdata['helmet']
     print(f"Helmet {helmet_id} connected with result code {rc}")
     
     if rc == 0:
+        # Publish device info (Retained, QoS 2)
+        info_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/{helmet_id}/info"
+        info_payload = helmet.device_info()
+        client.publish(info_topic, info_payload, qos=2, retain=True)
+        print(f"✅ Helmet {helmet_id} published info to: {info_topic}")
+
         # Subscribe to commands from manager for this specific helmet
         command_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_HELMET}/{helmet_id}/command"
-        client.subscribe(command_topic, qos=0)
+        client.subscribe(command_topic, qos=1)
         print(f"✅ Helmet {helmet_id} subscribed to: {command_topic}")
 
 
@@ -155,9 +162,9 @@ def start_helmet_device(helmet_id, latitude, longitude, boundaries):
             # CHARGING MODE
             helmet.recharge_battery(random.randint(5, 10))  # Faster charge
         
-        # Publish telemetry
-        payload = helmet.info()
-        mqtt_client.publish(telemetry_topic, payload, 0, False)
+        # Publish telemetry (SenML)
+        payload = helmet.to_senml()
+        mqtt_client.publish(telemetry_topic, payload, 1, False)
         
         # Clean Logic
         log_msg = (

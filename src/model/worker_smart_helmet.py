@@ -97,3 +97,24 @@ class WorkerSmartHelmet:
         }
 
         return json.dumps(data)
+
+    def device_info(self):
+        """Metadata for retained info topic (aligned with template)"""
+        return json.dumps({
+            "id": self.id,
+            "user_id": "worker-unimore-333695",
+            "software_version": "2.0.0",
+            "type": "helmet",
+            "capabilities": ["gps", "battery", "led"]
+        })
+
+    def to_senml(self):
+        """Convert telemetry to SenML+JSON format with hierarchical names"""
+        import time
+        timestamp = time.time()
+        return json.dumps([
+            {"n": "helmet.gps.lat", "u": "lat", "v": self.position.latitude, "t": timestamp},
+            {"n": "helmet.gps.lon", "u": "lon", "v": self.position.longitude, "t": timestamp},
+            {"n": "helmet.sensor.battery", "u": "%", "v": self.battery, "t": timestamp},
+            {"n": "helmet.actuator.led", "v": self.led, "t": timestamp}
+        ])

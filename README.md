@@ -64,26 +64,29 @@ Stations monitor air quality and noise. If thresholds are exceeded (e.g., high d
 
 All data is exchanged using JSON payloads. Timestamps are represented as Unix epoch time (seconds/milliseconds) for temporal correlation.
 
-**Helmet Telemetry Model**
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `id` | String | Unique identifier for the helmet |
-| `latitude` | Double | GPS Latitude |
-| `longitude` | Double | GPS Longitude |
-| `battery` | Integer | Level (0-100%) |
-| `led` | Integer | State (0: Work, 1: Charge) |
-| `timestamp` | Long | Unix epoch timestamp |
+**Helmet Telemetry Model (SenML+JSON)**
+| Field | Name (`n`) | Unit (`u`) | Type | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `latitude` | `helmet.gps.lat` | `lat` | Double | GPS Latitude |
+| `longitude` | `helmet.gps.lon` | `lon` | Double | GPS Longitude |
+| `battery` | `helmet.sensor.battery` | `%` | Integer | Level (0-100%) |
+| `led` | `helmet.actuator.led` | - | Integer | State (0: Work, 1: Charge) |
 
-**Station Telemetry Model**
+**Station Telemetry Model (SenML+JSON)**
+| Field | Name (`n`) | Unit (`u`) | Type | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `latitude` | `station.gps.lat` | `lat` | Double | GPS Latitude |
+| `longitude` | `station.gps.lon` | `lon` | Double | GPS Longitude |
+| `dust` | `station.sensor.dust` | `pm` | Double | PM level measurement |
+| `noise` | `station.sensor.noise` | `db` | Double | Noise level (dB) |
+| `gas` | `station.sensor.gas` | `ppm` | Double | Gas concentration |
+
+**Device Info Data Model**
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `id` | String | Unique identifier for the station |
-| `latitude` | Double | GPS Latitude |
-| `longitude` | Double | GPS Longitude |
-| `dust` | Double | PM level measurement |
-| `noise` | Double | Noise level (dB) |
-| `gas` | Double | Gas concentration/presence |
-| `timestamp` | Long | Unix epoch timestamp |
+| `id` | String | Unique device identifier |
+| `user_id` | String | Unique user/worker identifier |
+| `software_version` | String | Firmware/software version (e.g., "2.0.0") |
 
 **Command Model (Manager -> Actuator)**
 | Field | Type | Description |
@@ -98,46 +101,40 @@ All data is exchanged using JSON payloads. Timestamps are represented as Unix ep
 
 MQTT is used as the primary communication protocol due to its lightweight nature and support for intermittent connectivity.
 
-### MQTT Topics & Data
-
-**Helmet Telemetry**
-- **Topic**: `helmet/{id}/telemetry`
+**Device Info (Discovery)**
+- **Topic Patterns**: `helmet/{id}/info`, `station/{id}/info`, `alarm/{id}/info`
 - **Payload**:
   ```json
   {
-    "id": "001",
-    "latitude": 45.1602,
-    "longitude": 10.7874,
-    "battery": 85,
-    "led": 0,
-    "timestamp": 1736698123.45
+    "id": "string",
+    "user_id": "string",
+    "software_version": "2.0.0",
+    "type": "helmet|station|alarm",
+    "capabilities": ["gps", "battery", ...]
   }
   ```
-- **QoS**: 0 (Best effort for high-frequency updates)
+- **QoS Level**: 2 (Ensures exactly once delivery for critical metadata)
+- **Retain Flag**: true (Keeps latest metadata available for new subscribers)
 
-**Station Telemetry**
-- **Topic**: `station/{id}/telemetry`
-- **Payload**:
+**Telemetry (Sampling)**
+- **Topic Patterns**: `helmet/{id}/telemetry`, `station/{id}/telemetry`
+- **Payload (SenML+JSON)**:
   ```json
-  {
-    "id": "S01",
-    "latitude": 45.1590,
-    "longitude": 10.7880,
-    "dust": 35.5,
-    "noise": 45.0,
-    "gas": 0.0,
-    "timestamp": 1736698124.00
-  }
+  [
+    {"n": "helmet.gps.lat", "u": "lat", "v": 45.1602, "t": 1736698123.45},
+    {"n": "helmet.sensor.battery", "u": "%", "v": 85, "t": 1736698123.45}
+  ]
   ```
-- **QoS**: 1 (Ensures monitoring data is received)
+- **QoS Level**: 1 (Ensures at least once delivery for monitoring data)
+- **Retain Flag**: false (Data is time-sensitive and should not be retained)
 
 ### MQTT Topics & Service Mapping
 
 | Topic Pattern | Purpose | Publisher | Subscriber |
 | :--- | :--- | :--- | :--- |
-| `helmet/+/telemetry` | Worker status updates | Helmets | Manager, Dashboard |
-| `station/+/telemetry` | Environmental status | Stations | Manager, Dashboard |
-| `manager/helmet/{id}/command` | LED Control (Charge/Danger) | Manager | Helmet |
+| `+/+/info` | Device discovery (Retained) | All Devices | Manager, Dashboard |
+| `+/+/telemetry` | SenML sensor data | Helmets/Stations | Manager, Dashboard |
+| `manager/helmet/{id}/command` | LED Control (Charge) | Manager | Helmet |
 | `manager/alarm/{id}/command` | Siren & Display control | Manager | Alarm |
 
 ---

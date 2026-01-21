@@ -27,3 +27,13 @@ class SafetyAlarmSystem:
 
     def to_json(self):
         return json.dumps(self, default=lambda o: o.__dict__)
+
+    def device_info(self, alarm_id):
+        """Metadata for retained info topic (aligned with template)"""
+        return json.dumps({
+            "id": alarm_id,
+            "user_id": "site-manager-unimore-333695",
+            "software_version": "2.0.0",
+            "type": "alarm",
+            "capabilities": ["siren", "display"]
+        })

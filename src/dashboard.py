@@ -174,14 +174,9 @@ def on_connect(client, userdata, flags, rc):
     global mqtt_connected
     if rc == 0:
         mqtt_connected = True
-        # Subscribe to all 4 main topic patterns
-        topics = [
-            (f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/+/telemetry", 0),
-            (f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/+/telemetry", 0),
-            (f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_HELMET}/+/command", 0),
-            (f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_ALARM}/+/command", 0)
-        ]
-        client.subscribe(topics)
+        # Subscribe to EVERYTHING under the project namespace
+        client.subscribe(f"{MQTT_BASIC_TOPIC}/#", qos=1)
+        print(f"✅ Dashboard subscribed to all topics under: {MQTT_BASIC_TOPIC}")
     else:
         mqtt_connected = False
 
@@ -196,50 +191,71 @@ def on_message(client, userdata, message):
         with data_lock:
             message_count += 1
             
-            # HELMET TELEMETRY
-            if f"/{TOPIC_HELMET}/" in topic and topic.endswith("/telemetry"):
-                h_id = str(payload.get('id', '???'))
-                helmets_data[h_id] = {
-                    'battery': payload.get('battery', 0),
-                    'led': payload.get('led', 0),
-                    'lat': payload.get('latitude', 0),
-                    'lon': payload.get('longitude', 0)
-                }
+            parts = topic.split('/')
+            if len(parts) < 3:
+                return
 
-            # STATION TELEMETRY
-            elif f"/{TOPIC_STATION}/" in topic and topic.endswith("/telemetry"):
-                s_id = str(payload.get('id', '???'))
-                stations_data[s_id] = {
-                    'dust': payload.get('dust', 0),
-                    'noise': payload.get('noise', 0),
-                    'gas': payload.get('gas', 0)
-                }
+            device_type = parts[-3]
+            device_id = parts[-2]
+            msg_type = parts[-1]
 
-            # HELMET COMMANDS (From Manager)
-            elif f"/{TOPIC_MANAGER}/{TOPIC_HELMET}/" in topic:
-                h_id = topic.split('/')[-2]
-                cmd = payload.get('command')
-                val = payload.get('led')
-                msg = f"{Colors.YELLOW}HELMET {h_id}{Colors.END} -> {Colors.BOLD}{cmd}{Colors.END} (led={val})"
-                command_log.append({'time': curr_time, 'msg': msg})
+            # DEVICE INFO (Discovery)
+            if msg_type == "info":
+                if device_type == TOPIC_HELMET:
+                    if device_id not in helmets_data:
+                        helmets_data[device_id] = {'battery': 0, 'led': 0}
+                elif device_type == TOPIC_STATION:
+                    if device_id not in stations_data:
+                        stations_data[device_id] = {'dust': 0, 'noise': 0, 'gas': 0}
 
-            # ALARM COMMANDS (From Manager)
-            elif f"/{TOPIC_MANAGER}/{TOPIC_ALARM}/" in topic:
-                a_id = topic.split('/')[-2]
+            # TELEMETRY (SenML)
+            elif msg_type == "telemetry":
+                data = {}
+                if isinstance(payload, list):
+                    for entry in payload:
+                        n, v = entry.get('n', ''), entry.get('v')
+                        if 'gps.lat' in n: data['latitude'] = v
+                        elif 'gps.lon' in n: data['longitude'] = v
+                        elif 'sensor.battery' in n: data['battery'] = v
+                        elif 'actuator.led' in n: data['led'] = v
+                        elif 'sensor.dust' in n: data['dust'] = v
+                        elif 'sensor.noise' in n: data['noise'] = v
+                        elif 'sensor.gas' in n: data['gas'] = v
+                
+                if device_type == TOPIC_HELMET:
+                    helmets_data[device_id] = {
+                        'battery': int(data.get('battery', 0)),
+                        'led': int(data.get('led', 0)),
+                        'lat': data.get('latitude', 0),
+                        'lon': data.get('longitude', 0)
+                    }
+                elif device_type == TOPIC_STATION:
+                    stations_data[device_id] = {
+                        'dust': data.get('dust', 0),
+                        'noise': data.get('noise', 0),
+                        'gas': data.get('gas', 0)
+                    }
+
+            # COMMANDS (From Manager)
+            elif parts[-4] == TOPIC_MANAGER:
                 cmd = payload.get('command')
                 
-                if cmd == 'turn_siren_on':
-                    alarm_state['siren'] = True
-                    msg = f"{Colors.RED}ALARM {a_id}{Colors.END} -> {Colors.BOLD}SIREN ON{Colors.END}"
-                elif cmd == 'turn_siren_off':
-                    alarm_state['siren'] = False
-                    msg = f"{Colors.GREEN}ALARM {a_id}{Colors.END} -> {Colors.BOLD}SIREN OFF{Colors.END}"
-                elif cmd == 'update_display':
-                    zones = payload.get('zones', [])
-                    alarm_state['zones'] = zones
-                    msg = f"{Colors.BLUE}ALARM {a_id}{Colors.END} -> {Colors.BOLD}ZONES UPDATED{Colors.END} ({len(zones)} zones)"
-                else:
-                    msg = f"ALARM {a_id} -> {cmd}"
+                if device_type == TOPIC_HELMET:
+                    val = payload.get('led')
+                    msg = f"{Colors.YELLOW}HELMET {device_id}{Colors.END} -> {Colors.BOLD}{cmd}{Colors.END} (led={val})"
+                elif device_type == TOPIC_ALARM:
+                    if cmd == 'turn_siren_on':
+                        alarm_state['siren'] = True
+                        msg = f"{Colors.RED}ALARM {device_id}{Colors.END} -> {Colors.BOLD}SIREN ON{Colors.END}"
+                    elif cmd == 'turn_siren_off':
+                        alarm_state['siren'] = False
+                        msg = f"{Colors.GREEN}ALARM {device_id}{Colors.END} -> {Colors.BOLD}SIREN OFF{Colors.END}"
+                    elif cmd == 'update_display':
+                        zones = payload.get('zones', [])
+                        alarm_state['zones'] = [str(z) for z in zones]
+                        msg = f"{Colors.BLUE}ALARM {device_id}{Colors.END} -> {Colors.BOLD}ZONES UPDATED{Colors.END} ({len(zones)} zones)"
+                    else:
+                        msg = f"ALARM {device_id} -> {cmd}"
                 
                 command_log.append({'time': curr_time, 'msg': msg})
             

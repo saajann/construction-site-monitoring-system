@@ -29,12 +29,17 @@ TOPIC_MANAGER = os.getenv("TOPIC_MANAGER")
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code " + str(rc))
 
-    # Subscribe to manager commands for this alarm
-    # Topic: /base/manager/alarm/alarm_id/command (using wildcard for all alarms for now or specific)
-    # Let's subscribe to all alarm commands from manager
-    command_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_ALARM}/#"
-    client.subscribe(command_topic)
-    print(f"✅ Subscribed to: {command_topic}")
+    if rc == 0:
+        # Publish device info (Retained, QoS 2)
+        info_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_ALARM}/{alarm_id}/info"
+        info_payload = alarm_system.device_info(alarm_id)
+        client.publish(info_topic, info_payload, qos=2, retain=True)
+        print(f"✅ Alarm {alarm_id} published info to: {info_topic}")
+
+        # Subscribe to manager commands for this alarm
+        command_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_ALARM}/#"
+        client.subscribe(command_topic, qos=1)
+        print(f"✅ Subscribed to: {command_topic}")
 
 # method to receive asynchronous messages
 def on_message(client, userdata, message):

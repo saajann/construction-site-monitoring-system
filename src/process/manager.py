@@ -116,15 +116,15 @@ class DataCollectorManager:
         print(f"Manager connected with result code {rc}")
         
         if rc == 0:
-            # Subscribe to all helmet telemetry
-            helmet_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_HELMET}/#"
-            client.subscribe(helmet_topic, qos=0)
-            print(f"✅ Subscribed to: {helmet_topic}")
+            # Subscribe to all device info (Retained, QoS 2)
+            info_pattern = f"{MQTT_BASIC_TOPIC}/+/+/info"
+            client.subscribe(info_pattern, qos=2)
+            print(f"✅ Subscribed to: {info_pattern}")
 
-            # Subscribe to all station telemetry
-            station_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/#"
-            client.subscribe(station_topic, qos=0)
-            print(f"✅ Subscribed to: {station_topic}")
+            # Subscribe to all telemetry
+            telemetry_pattern = f"{MQTT_BASIC_TOPIC}/+/+/telemetry"
+            client.subscribe(telemetry_pattern, qos=1)
+            print(f"✅ Subscribed to: {telemetry_pattern}")
         else:
             print(f"❌ Connection failed with code {rc}")
     
@@ -134,22 +134,61 @@ class DataCollectorManager:
             topic = message.topic
             payload = json.loads(message.payload.decode("utf-8"))
             
-            # Print less verbose logs for cleaner output
-            # if random.random() < 0.1: # Sample logs
-            #     print(f"📨 Received: {topic}")
-            
-            # Route message based on topic
-            if f"/{TOPIC_HELMET}/" in topic:
-                self._handle_helmet_message(topic, payload)
-                self.update_helmets_csv()
-            elif f"/{TOPIC_STATION}/" in topic:
-                self._handle_station_message(topic, payload)
-                self.update_stations_csv()
+            # Route message based on topic pattern
+            parts = topic.split('/')
+            if len(parts) < 3:
+                return
+
+            device_type = parts[-3]
+            device_id = parts[-2]
+            msg_type = parts[-1]
+
+            if msg_type == "info":
+                self._handle_info_message(device_type, device_id, payload)
+            elif msg_type == "telemetry":
+                # Parse SenML payload
+                data = self._parse_senml(payload)
+                data['id'] = device_id # Add ID for handler
+
+                if device_type == TOPIC_HELMET:
+                    self._handle_helmet_message(topic, data)
+                    self.update_helmets_csv()
+                elif device_type == TOPIC_STATION:
+                    self._handle_station_message(topic, data)
+                    self.update_stations_csv()
             
         except json.JSONDecodeError as e:
             print(f"❌ JSON decode error: {e}")
         except Exception as e:
             print(f"❌ Error processing message: {e}")
+
+    def _parse_senml(self, payload):
+        """Extract name-value pairs from SenML list (handling hierarchical names)"""
+        data = {}
+        if isinstance(payload, list):
+            for entry in payload:
+                name = entry.get('n', '')
+                value = entry.get('v')
+                if not name: continue
+
+                # Map hierarchical names back to flat keys for internal handlers
+                if 'gps.lat' in name: data['latitude'] = value
+                elif 'gps.lon' in name: data['longitude'] = value
+                elif 'sensor.battery' in name: data['battery'] = value
+                elif 'actuator.led' in name: data['led'] = value
+                elif 'sensor.dust' in name: data['dust'] = value
+                elif 'sensor.noise' in name: data['noise'] = value
+                elif 'sensor.gas' in name: data['gas'] = value
+                else: data[name] = value # Fallback
+        return data
+
+    def _handle_info_message(self, device_type, device_id, payload):
+        """Track active devices and their metadata (Discovery)"""
+        if not hasattr(self, 'discovered_devices'):
+            self.discovered_devices = {}
+        
+        self.discovered_devices[device_id] = payload
+        print(f"[MGR] 🚀 DEVICE DISCOVERED | ID: {device_id} | Type: {device_type} | SW: {payload.get('software_version')}")
 
     def _handle_station_message(self, topic, payload):
         """Process station telemetry"""

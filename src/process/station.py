@@ -34,26 +34,37 @@ CSV_PATH = ROOT / "data" / "static" / "stations.csv"
 
 
 def on_connect(client, userdata, flags, rc):
-    print(f"Station {userdata['station_id']} connected with result code {rc}")
+    station_id = userdata['station_id']
+    station = userdata['station']
+    print(f"Station {station_id} connected with result code {rc}")
+    
+    if rc == 0:
+        # Publish device info (Retained, QoS 2)
+        info_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/{station_id}/info"
+        info_payload = station.device_info()
+        client.publish(info_topic, info_payload, qos=2, retain=True)
+        print(f"✅ Station {station_id} published info to: {info_topic}")
 
 def start_station_device(station_id, latitude, longitude):
     """
     
     """
+    # create station
+    position = GPS(latitude, longitude)
+    station = EnvironmentalMonitoringStation(station_id, position)
+    
     # setup client MQTT
     mqtt_client = mqtt.Client(station_id)
-    mqtt_client.user_data_set({'station_id': station_id})
+    mqtt_client.user_data_set({
+        'station_id': station_id,
+        'station': station
+    })
     mqtt_client.on_connect = on_connect
     mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
     
     print(f"Connecting station {station_id} to {BROKER_ADDRESS}:{BROKER_PORT}")
     mqtt_client.connect(BROKER_ADDRESS, BROKER_PORT)
     mqtt_client.loop_start()
-    
-    # create station
-    position = GPS(latitude, longitude)
-    station = EnvironmentalMonitoringStation(station_id, position)
-    
     # Loop telemetry
     telemetry_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_STATION}/{station_id}/telemetry"
     
@@ -64,8 +75,9 @@ def start_station_device(station_id, latitude, longitude):
         station.update_noise_level()
         station.update_gas_level()
         
-        payload = station.info()
-        mqtt_client.publish(telemetry_topic, payload, 0, False)
+        # Publish telemetry (SenML)
+        payload = station.to_senml()
+        mqtt_client.publish(telemetry_topic, payload, 1, False)
         
         log_msg = (
             f"[STA-{station_id}] 📤 SENT | "

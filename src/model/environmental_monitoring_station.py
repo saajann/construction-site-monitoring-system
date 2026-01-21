@@ -66,3 +66,25 @@ class EnvironmentalMonitoringStation:
         }
 
         return json.dumps(data)
+
+    def device_info(self):
+        """Metadata for retained info topic (aligned with template)"""
+        return json.dumps({
+            "id": self.id,
+            "user_id": "admin-unimore-333695",
+            "software_version": "2.0.0",
+            "type": "station",
+            "capabilities": ["gps", "dust", "noise", "gas"]
+        })
+
+    def to_senml(self):
+        """Convert telemetry to SenML+JSON format with hierarchical names"""
+        import time
+        timestamp = time.time()
+        return json.dumps([
+            {"n": "station.gps.lat", "u": "lat", "v": self.position.latitude, "t": timestamp},
+            {"n": "station.gps.lon", "u": "lon", "v": self.position.longitude, "t": timestamp},
+            {"n": "station.sensor.dust", "u": "pm", "v": self.dust, "t": timestamp},
+            {"n": "station.sensor.noise", "u": "db", "v": self.noise, "t": timestamp},
+            {"n": "station.sensor.gas", "u": "ppm", "v": self.gas, "t": timestamp}
+        ])
