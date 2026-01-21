@@ -1,6 +1,5 @@
 paho-mqtt==1.6.1
-streamlit>=1.28.0
-plotly>=5.17.0
+flask>=3.0.0
 pandas>=2.0.0
 python-dotenv>=1.0.0
-shapely>=2.0.0flask>=3.0.0
+shapely>=2.0.0
