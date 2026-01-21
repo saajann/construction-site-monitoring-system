@@ -130,12 +130,15 @@ MQTT is used as the primary communication protocol due to its lightweight nature
 
 ### MQTT Topics & Service Mapping
 
-| Topic Pattern | Purpose | Publisher | Subscriber |
+The mapping below describes how different services interact via MQTT Topics. Notably, the **Real-Time Dashboard** is a universal consumer that monitors the entire project namespace.
+
+| Topic Pattern | Purpose | Publisher(s) | Subscriber(s) |
 | :--- | :--- | :--- | :--- |
-| `+/+/info` | Device discovery (Retained) | All Devices | Manager, Dashboard |
-| `+/+/telemetry` | SenML sensor data | Helmets/Stations | Manager, Dashboard |
-| `manager/helmet/{id}/command` | LED Control (Charge) | Manager | Helmet |
-| `manager/alarm/{id}/command` | Siren & Display control | Manager | Alarm |
+| `+/+/info` | Device discovery (Retained) | All Devices (Helmets, Stations, Alarm) | Manager, Dashboard |
+| `+/+/telemetry` | SenML sensor data | Worker Helmets, Env. Stations | Manager, Dashboard |
+| `manager/helmet/{id}/command` | LED Control (Charge) | Data Collector Manager | Target Helmet, Dashboard |
+| `manager/alarm/{id}/command` | Siren & Display control | Data Collector Manager | Safety Alarm, Dashboard |
+| `#` | **Universal System Monitoring** | - | **Real-Time Dashboard** |
 
 ---
 
