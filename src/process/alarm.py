@@ -38,7 +38,7 @@ def on_connect(client, userdata, flags, rc):
 
         # Subscribe to manager commands for this alarm
         command_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_ALARM}/#"
-        client.subscribe(command_topic, qos=1)
+        client.subscribe(command_topic, qos=2)
         print(f"✅ Subscribed to: {command_topic}")
 
 # method to receive asynchronous messages

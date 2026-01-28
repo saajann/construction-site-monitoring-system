@@ -140,26 +140,6 @@ The mapping below describes how different services interact via MQTT Topics. Not
 | `manager/alarm/{id}/command` | Siren & Display control | Data Collector Manager | Safety Alarm, Dashboard |
 | `#` | **Universal System Monitoring** | - | **Real-Time Dashboard** |
 
-### HTTP RESTful APIs
-
-While the core telemetry is event-driven over MQTT, the **Web Interface** consumes periodically aggregated data from the **Web Server** via a RESTful API. This allows for a decoupled visualization layer that doesn't require a constant persistent MQTT connection for every browser client.
-
-**Real-Time Snapshot API**
-
-- **Endpoint**: `GET /api/data`
-- **Output**: JSON
-- **Description**: Returns the complete current state of the site, including all active helmets, environmental stations, and the status of the alarm system.
-
-**Data Model (HTTP Response)**:
-```json
-{
-  "helmets": [...],
-  "stations": [...],
-  "sectors": [...],
-  "alarm_active": boolean,
-  "station_range": integer
-}
-```
 
 ---
 

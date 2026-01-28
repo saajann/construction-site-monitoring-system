@@ -294,7 +294,9 @@ class DataCollectorManager:
             "timestamp": time.time()
         }
         
-        self.mqtt_client.publish(command_topic, json.dumps(payload), qos=0, retain=False)
+        payload_json = json.dumps(payload)
+        
+        self.mqtt_client.publish(command_topic, payload_json, qos=2, retain=False)
         print(f"    [MGR] 📤 CMD SENT to Alarm {alarm_id} | Update Zones: {zones}")
 
 
@@ -312,7 +314,7 @@ class DataCollectorManager:
         
         payload_json = json.dumps(payload)
         
-        result = self.mqtt_client.publish(command_topic, payload_json, qos=0, retain=False)
+        result = self.mqtt_client.publish(command_topic, payload_json, qos=2, retain=False)
         
         if result.rc == 0:
             pass # print(f"🚨 Command sent to alarm {alarm_id}: {command}")
@@ -434,7 +436,7 @@ class DataCollectorManager:
         payload_json = json.dumps(payload)
         
         # Publish command
-        result = self.mqtt_client.publish(command_topic, payload_json, qos=0, retain=False)
+        result = self.mqtt_client.publish(command_topic, payload_json, qos=2, retain=False)
         
         if result.rc == 0:
             print(f"    [MGR] 📤 CMD SENT to Helmet {helmet_id}: {payload_json}")

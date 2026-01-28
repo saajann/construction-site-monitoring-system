@@ -64,7 +64,7 @@ def on_connect(client, userdata, flags, rc):
 
         # Subscribe to commands from manager for this specific helmet
         command_topic = f"{MQTT_BASIC_TOPIC}/{TOPIC_MANAGER}/{TOPIC_HELMET}/{helmet_id}/command"
-        client.subscribe(command_topic, qos=1)
+        client.subscribe(command_topic, qos=2)
         print(f"✅ Helmet {helmet_id} subscribed to: {command_topic}")
 
 
